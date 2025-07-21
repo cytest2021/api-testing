@@ -1,6 +1,6 @@
 # app/services/excel_parser.py
 import openpyxl
-from .models import Interface, InterfaceParam
+from app.models import Interface, InterfaceParam
 
 
 def parse_excel(file_path, project_id):

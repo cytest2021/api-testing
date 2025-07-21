@@ -1,5 +1,5 @@
 # app/services/case_generator.py
-from .models import InterfaceParam, TestCase
+from app.models import InterfaceParam, TestCase
 
 
 def generate_cases(interface_id, creator_id):

@@ -1,7 +1,7 @@
 # app/services/test_executor.py
 import requests
 from datetime import datetime
-from .models import TestCase, TestResult
+from app.models import TestCase, TestResult
 
 
 def run_test_case(case_id, env_url):

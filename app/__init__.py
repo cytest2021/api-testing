@@ -1,5 +1,7 @@
 from flask import Flask
 from .models import db
+from flask import Flask
+from app.routes.main_routes import main_bp
 
 
 def create_app():
@@ -12,4 +14,10 @@ def create_app():
     # 创建数据表
     with app.app_context():
         db.create_all()
+    return app
+
+def create_app():
+    app = Flask(__name__)
+    # 注册蓝图，让路由生效
+    app.register_blueprint(main_bp)
     return app
