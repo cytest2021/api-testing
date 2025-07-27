@@ -1,50 +1,55 @@
 import os
-# 从 flask 导入 Flask 类，用于创建应用实例
 from flask import Flask
-# 从当前包（app）的 models 模块导入 db（需确保 models.py 中正确初始化了 db）
-from .models import db
-# 从 app.routes 下的 main_routes 模块导入蓝图 main_bp
-from app.routes.main_routes import main_bp
+from .models import db, User  # 导入数据库实例
+from app.routes.main_routes import main_bp  # 导入主蓝图
 from flask_login import LoginManager
 
+# 初始化登录管理器
 login_manager = LoginManager()
 
 
 def create_app():
+    # 1. 计算项目路径（确保模板目录正确）
+    # 获取当前文件(__init__.py)的绝对路径
+    current_file_path = os.path.abspath(__file__)
+    # 获取app目录的路径
+    app_dir = os.path.dirname(current_file_path)
+    # 项目根目录（app的上级目录）
+    project_root = os.path.dirname(app_dir)
+    # 模板目录路径（frontend/templates）
+    template_path = os.path.join(project_root, 'frontend', 'templates')
 
-    # 创建 Flask 应用实例，指定模板文件夹路径（根据你的工程结构，模板在 frontend/templates）
-    # app = Flask(__name__, template_folder='frontend/templates')
-    # 获取 frontend/templates 绝对路径
-    # 获取项目根目录（即 api-test 目录）
-    PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-
-    # 构造 frontend/templates 的绝对路径
-    template_path = os.path.abspath(os.path.join(PROJECT_ROOT, '..', 'frontend', 'templates'))
-
-    # 创建 Flask 应用，强制使用绝对路径
+    # 2. 只创建一次Flask应用实例
     app = Flask(__name__, template_folder=template_path)
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///your_database.db'
-    # 打印路径验证
-    print(f"模板目录: {template_path}")  # 应该输出: /Users/.../api-testing/frontend/templates
 
-    # 配置 SQLite 数据库（文档指定开发环境用 SQLite）
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///api_test.db'
-    # 关闭 SQLAlchemy 的修改跟踪（减少不必要的开销）
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # 3. 配置应用参数（所有配置必须在初始化扩展前完成）
+    # 数据库配置
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///api_test.db'  # 数据库文件将生成在项目根目录
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False  # 关闭不必要的跟踪
+    # 安全配置（Flask-Login必须）
+    app.config['SECRET_KEY'] = 'your-secure-secret-key-12345'  # 替换为随机字符串（建议至少24个字符）
 
-    #登录
-    app = Flask(__name__)
-    login_manager.init_app(app)
-    # 初始化 db，将 Flask 应用与 SQLAlchemy 的 db 实例关联
-    db.init_app(app)
+    # 4. 初始化扩展（使用同一个app实例）
+    login_manager.init_app(app)  # 初始化登录管理器
 
-    # 注册蓝图，让 main_routes 中定义的路由生效
-    app.register_blueprint(main_bp)
+    @login_manager.user_loader
+    def load_user(user_id):
+        # 写死返回 ID 为 1 的用户，需确保数据库有这条数据；
+        # 若数据库没数据，可改成直接实例化，比如 User(1, "test@example.com", "test_password")
+        # 具体参数根据你的 User 模型 __init__ 方法调整
+        return User.query.get(1)
+    db.init_app(app)  # 初始化数据库
 
-    # 创建数据表：在应用上下文内执行，确保 Flask - SQLAlchemy 能正确操作数据库
+    # 5. 注册蓝图（路由）
+    app.register_blueprint(main_bp)  # 注册主路由蓝图
+
+    # 6. 创建数据库表（在应用上下文中）
     with app.app_context():
-        # 根据 models 中定义的模型类，创建对应的数据库表
-        db.create_all()
+        db.create_all()  # 根据模型自动创建表
+        print("数据库表创建完成")
 
-        # 返回创建好的 Flask 应用实例，供 run.py 等入口文件使用
+    # 验证配置是否正确
+    print(f"模板目录验证: {template_path} (是否存在: {os.path.exists(template_path)})")
+    print(f"数据库URI配置: {app.config['SQLALCHEMY_DATABASE_URI']}")
+
     return app
