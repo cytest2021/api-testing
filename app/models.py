@@ -1,16 +1,26 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from flask_login import UserMixin
 # 初始化 SQLAlchemy
 db = SQLAlchemy()
 
 # 1. 用户表（管理系统用户，区分角色）
-class User(db.Model):
+class User(db.Model, UserMixin):  # 新增：继承 UserMixin
     __tablename__ = 'user'
     user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(50), nullable=False, unique=True)
     password = db.Column(db.String(100), nullable=False)
     role = db.Column(db.Enum('admin', 'regular', 'viewer'), default='regular', nullable=False)
     create_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    # 新增：实现 is_active 属性，Flask - Login 会调用它判断用户是否激活
+    @property
+    def is_active(self):
+        # 简单返回 True，代表用户默认激活；实际可根据业务逻辑（如数据库字段）控制
+        return True
+    # 新增：实现 get_id 方法，返回用户唯一标识
+    def get_id(self):
+        return str(self.user_id)  # 返回 user_id 作为用户唯一标识，需转字符串
 
 # 2. 项目表（组织接口、用例的层级）
 class Project(db.Model):

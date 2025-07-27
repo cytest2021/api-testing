@@ -1,28 +1,142 @@
 <!-- templates/edit_case.html -->
-<div class="container">
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <title>编辑测试用例</title>
+  <!-- 引入 Bootstrap 样式（可根据实际项目调整 CDN 或本地路径） -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <style>
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
     <h3>编辑测试用例</h3>
+    <!-- 用于展示接口基础信息，方便关联 -->
+    <div id="interfaceInfo" class="mb-4">
+      <p><strong>接口名称：</strong><span id="interfaceName"></span></p>
+      <p><strong>请求URL：</strong><span id="interfaceUrl"></span></p>
+      <p><strong>请求方法：</strong><span id="interfaceMethod"></span></p>
+    </div>
     <form id="caseForm">
-        <div class="mb-3">
-            <label>用例名称</label>
-            <input type="text" class="form-control" name="case_name" required>
+      <!-- 用例ID，编辑时后端返回，新增时可不传 -->
+      <input type="hidden" name="case_id" id="caseId">
+      <div class="mb-3">
+        <label>用例名称</label>
+        <input type="text" class="form-control" name="case_name" id="caseName" required>
+      </div>
+      <div class="mb-3">
+        <label>参数配置</label>
+        <div id="paramsContainer">
+          <!-- 这里动态插入参数输入框 -->
         </div>
-        <div class="mb-3">
-            <label>参数配置</label>
-            <div id="paramsContainer">
-                <!-- 动态生成参数输入框（根据接口参数） -->
-                <div class="input-group mb-2">
-                    <span class="input-group-text">param1</span>
-                    <input type="text" class="form-control" name="params[param1]">
-                </div>
-            </div>
-        </div>
-        <div class="mb-3">
-            <label>断言规则</label>
-            <select class="form-select" name="assert_rule">
-                <option value="status_code=200">状态码=200</option>
-                <option value="json.status=success">响应字段status=success</option>
-            </select>
-        </div>
-        <button type="submit" class="btn btn-success">保存用例</button>
+      </div>
+      <div class="mb-3">
+        <label>断言规则</label>
+        <select class="form-select" name="assert_rule" id="assertRule">
+          <option value="status_code=200">状态码=200</option>
+          <option value="json.status=success">响应字段status=success</option>
+          <!-- 可根据实际需求扩展更多断言规则 -->
+        </select>
+      </div>
+      <div class="mb-3">
+        <label>预期结果</label>
+        <textarea class="form-control" name="expected_result" id="expectedResult" rows="3"></textarea>
+      </div>
+      <button type="submit" class="btn btn-success">保存用例</button>
     </form>
-</div>
+  </div>
+
+  <script>
+    // 从 URL 中获取 project_id 和 interface_id，可根据实际路由传参调整
+    const projectId = new URLSearchParams(window.location.search).get('project_id');
+    const interfaceId = new URLSearchParams(window.location.search).get('interface_id');
+
+    $(document).ready(function () {
+      // 1. 获取接口信息及关联的参数，用于渲染
+      $.ajax({
+        url: `/api/project/${projectId}/interfaces`,
+        type: 'GET',
+        success: function (res) {
+          if (res.code === 200) {
+            // 找到当前接口的数据
+            const interfaceData = res.data.find(item => item.interface.id == interfaceId);
+            if (interfaceData) {
+              // 渲染接口基础信息
+              $('#interfaceName').text(interfaceData.interface.name);
+              $('#interfaceUrl').text(interfaceData.interface.url);
+              $('#interfaceMethod').text(interfaceData.interface.method);
+
+              // 动态渲染参数输入框
+              const paramsContainer = $('#paramsContainer');
+              paramsContainer.empty(); // 清空原有内容
+              interfaceData.params.forEach(param => {
+                const paramHtml = `
+                  <div class="input-group mb-2">
+                    <span class="input-group-text">${param.name}</span>
+                    <input type="text" class="form-control" name="params[${param.name}]" placeholder="请输入 ${param.name} 的值（数据类型：${param.data_type}，${param.is_required ? '必填' : '选填'}）">
+                  </div>
+                `;
+                paramsContainer.append(paramHtml);
+              });
+
+              // 如果是编辑用例，可再发起请求获取用例详情并回显（这里假设后续扩展编辑逻辑）
+              // 比如：如果是编辑，根据 case_id 再请求 /api/case/{case_id} 获取数据回显到表单
+            }
+          } else {
+            alert('获取接口数据失败：' + res.msg);
+          }
+        },
+        error: function (err) {
+          console.error('请求接口数据出错：', err);
+          alert('获取接口数据失败，请稍后重试');
+        }
+      });
+
+      // 2. 表单提交事件
+      $('#caseForm').on('submit', function (e) {
+        e.preventDefault();
+        const formData = $(this).serializeArray();
+        const data = {};
+        formData.forEach(item => {
+          if (item.name.startsWith('params[')) {
+            const paramKey = item.name.replace('params[', '').replace(']', '');
+            if (!data.params) data.params = {};
+            data.params[paramKey] = item.value;
+          } else {
+            data[item.name] = item.value;
+          }
+        });
+
+        // 提交到后端保存，这里假设后端有 /api/case/save 接口，实际根据路由调整
+        $.ajax({
+          url: `/api/case/save?interface_id=${interfaceId}`,
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify(data),
+          success: function (res) {
+            if (res.code === 200) {
+              alert('用例保存成功');
+              // 可跳转到列表页等，如 window.location.href = '/case/list';
+            } else {
+              alert('保存失败：' + res.msg);
+            }
+          },
+          error: function (err) {
+            console.error('保存用例出错：', err);
+            alert('保存用例失败，请稍后重试');
+          }
+        });
+      });
+    });
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,161 @@
+{% extends "index.html" %}  <!-- 继承主布局，确保侧边栏等样式一致 -->
+
+{% block content %}
+<div class="container my-4">
+    <h2>接口管理</h2>
+
+    <!-- 项目列表（左侧） -->
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-header">
+                    <h5>项目列表</h5>
+                </div>
+                <div class="card-body" id="projectList">
+                    <!-- 加载中提示 -->
+                    <p class="text-muted" id="projectLoading">加载项目中...</p>
+                    <!-- 动态加载项目数据 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 接口列表（右侧） -->
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header">
+                    <h5>当前项目接口列表</h5>
+                </div>
+                <div class="card-body" id="interfaceContainer">
+                    <!-- 加载中提示 -->
+                    <p class="text-muted" id="interfaceLoading" style="display: none;">加载接口中...</p>
+                    <!-- 动态加载接口数据 -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    // 1. 加载所有项目列表
+    loadProjects();
+
+    // 2. 绑定项目点击事件（动态元素需用事件委托）
+    $(document).on('click', '.project-item', function() {
+        const projectId = $(this).data('project-id');
+        loadInterfacesByProject(projectId);
+    });
+});
+
+// 加载所有项目
+function loadProjects() {
+    $.ajax({
+        url: '/api/all-projects',  // 后端获取项目列表的接口
+        type: 'GET',
+        beforeSend: function() {
+            $('#projectLoading').show(); // 显示加载中
+        },
+        success: function(res) {
+            $('#projectLoading').hide(); // 隐藏加载中
+            if (res.code === 200) {
+                renderProjectList(res.data);
+            } else {
+                $('#projectList').html(`<p class="text-danger">加载失败：${res.msg}</p>`);
+            }
+        },
+        error: function(err) {
+            $('#projectLoading').hide();
+            $('#projectList').html('<p class="text-danger">加载项目失败，请重试</p>');
+            console.error('加载项目出错：', err);
+        }
+    });
+}
+
+// 渲染项目列表
+function renderProjectList(projects) {
+    const projectList = $('#projectList');
+    projectList.empty();
+
+    if (projects.length === 0) {
+        projectList.html('<p class="text-muted">暂无项目</p>');
+        return;
+    }
+
+    projects.forEach(project => {
+        const projectItem = `
+            <a href="javascript:;" class="list-group-item list-group-item-action project-item"
+               data-project-id="${project.id}">
+                ${project.name}
+            </a>
+        `;
+        projectList.append(projectItem);
+    });
+}
+
+// 加载指定项目的接口
+function loadInterfacesByProject(projectId) {
+    $.ajax({
+        url: `/api/project/${projectId}/interfaces`,  // 后端获取项目接口的接口
+        type: 'GET',
+        beforeSend: function() {
+            $('#interfaceLoading').show(); // 显示加载中
+        },
+        success: function(res) {
+            $('#interfaceLoading').hide(); // 隐藏加载中
+            if (res.code === 200) {
+                renderInterfaces(res.data);
+            } else {
+                $('#interfaceContainer').html(`<p class="text-danger">加载失败：${res.msg}</p>`);
+            }
+        },
+        error: function(err) {
+            $('#interfaceLoading').hide();
+            $('#interfaceContainer').html('<p class="text-danger">加载接口失败，请重试</p>');
+            console.error('加载接口出错：', err);
+        }
+    });
+}
+
+// 渲染接口列表
+function renderInterfaces(interfaces) {
+    const interfaceContainer = $('#interfaceContainer');
+    interfaceContainer.empty();
+
+    if (interfaces.length === 0) {
+        interfaceContainer.html('<p class="text-muted">当前项目无接口</p>');
+        return;
+    }
+
+    const tableHtml = `
+        <table class="table table-striped table-hover">
+            <thead class="table-light">
+                <tr>
+                    <th>接口名称</th>
+                    <th>请求URL</th>
+                    <th>请求方法</th>
+                    <th>参数</th>
+                    <th>测试用例</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${interfaces.map(interface => `
+                    <tr>
+                        <td>${interface.interface.name}</td>
+                        <td>${interface.interface.url}</td>
+                        <td>${interface.interface.method}</td>
+                        <td>
+                            ${interface.params.map(param => param.name).join('<br>')}
+                        </td>
+                        <td>
+                            ${interface.cases.map(caseItem => caseItem.name).join('<br>')}
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+
+    interfaceContainer.html(tableHtml);
+}
+</script>
+{% endblock %}
