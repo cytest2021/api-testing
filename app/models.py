@@ -41,6 +41,10 @@ class Interface(db.Model):
     method = db.Column(db.Enum('GET', 'POST', 'PUT', 'DELETE', 'PATCH'), nullable=False)
     request_header = db.Column(db.Text)
     create_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    # 关联参数（一对多）
+    params = db.relationship('InterfaceParam', backref='interface', lazy='dynamic')
+    # 关联测试用例（一对多）
+    cases = db.relationship('TestCase', backref='interface', lazy='dynamic')
 
 # 4. 接口参数表（细化接口入参规则）
 class InterfaceParam(db.Model):

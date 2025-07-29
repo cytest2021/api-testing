@@ -7,16 +7,14 @@
 <body>
     <div class="container mt-5">
         <h3>导入Excel接口文档</h3>
-        <!-- 上传表单：替换 projectId 为 projectName -->
+        <!-- 上传表单 -->
         <form id="uploadForm" enctype="multipart/form-data" class="mt-4">
-            <!-- 新增：项目名称输入框 -->
             <div class="mb-3">
                 <label for="projectName" class="form-label">项目名称</label>
                 <input type="text" class="form-control" id="projectName" name="project_name" required
                        placeholder="输入项目名称（如：电商系统接口测试）">
             </div>
 
-            <!-- 保留：文件上传项 -->
             <div class="mb-3">
                 <label for="excelFile" class="form-label">选择Excel文件</label>
                 <input type="file" class="form-control" id="excelFile" name="file"
@@ -32,29 +30,67 @@
     </div>
 
     <script>
-        // 处理表单提交（无需修改，自动适配新字段）
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const formData = new FormData(e.target);
             const resultDiv = document.getElementById('result');
+            const submitButton = e.submitter;
 
             try {
+                // 禁用按钮防止重复提交
+                submitButton.disabled = true;
+                submitButton.textContent = "上传中...";
+
+                // 请求头配置
+                const headers = {
+                    'X-Import-Source': 'Excel-Upload',
+                    'Accept': 'application/json'
+                };
+
+                // 发送请求
                 const response = await fetch('/api/import-excel', {
                     method: 'POST',
-                    body: formData
+                    body: formData,
+                    headers: headers
                 });
+
+                // 处理响应
+                if (!response.ok) {
+                    throw new Error(`HTTP错误，状态码: ${response.status}`);
+                }
+
                 const data = await response.json();
 
-                resultDiv.className = data.result.includes('解析完成')
-                    ? 'mt-4 p-3 rounded border border-success bg-success bg-opacity-10'
-                    : 'mt-4 p-3 rounded border border-danger bg-danger bg-opacity-10';
-                resultDiv.textContent = data.result;
-                resultDiv.classList.remove('d-none');
+                // 显示成功提示并处理跳转
+                if (data.success) {
+                    resultDiv.className = 'mt-4 p-3 rounded border border-success bg-success bg-opacity-10';
+                    resultDiv.textContent = '上传接口成功，即将跳转到接口管理页面...';
+                    resultDiv.classList.remove('d-none');
+
+                    // 延迟1.5秒后跳转到 interface_management.html 页面
+                    setTimeout(() => {
+                        window.location.href = 'interface_management.html';
+                    }, 1500);
+                } else if (data.result?.includes('解析完成')) {
+                    resultDiv.className = 'mt-4 p-3 rounded border border-success bg-success bg-opacity-10';
+                    resultDiv.textContent = '上传接口成功';
+                    resultDiv.classList.remove('d-none');
+                } else {
+                    resultDiv.className = 'mt-4 p-3 rounded border border-warning bg-warning bg-opacity-10';
+                    resultDiv.textContent = data.result || '上传完成，但未解析到接口数据';
+                    resultDiv.classList.remove('d-none');
+                }
 
             } catch (error) {
                 resultDiv.className = 'mt-4 p-3 rounded border border-danger bg-danger bg-opacity-10';
                 resultDiv.textContent = '上传失败：' + error.message;
                 resultDiv.classList.remove('d-none');
+            } finally {
+                // 恢复按钮状态（如果没有跳转的话）
+                if (!resultDiv.textContent.includes('即将跳转')) {
+                    submitButton.disabled = false;
+                    submitButton.textContent = "上传并解析";
+                }
             }
         });
     </script>
