@@ -76,34 +76,57 @@ def get_all_projects():
 # --------------------- 调整：获取指定项目的接口数据 ---------------------
 @main_bp.route('/api/project/<int:project_id>/interfaces', methods=['GET'])
 def get_project_interfaces(project_id):
-    """
-    获取指定项目下的所有接口（含参数、用例关联数据）
-    """
     try:
-        # 查询项目下的接口，同时预加载参数、用例（优化查询性能）
-        interfaces = Interface.query.filter_by(project_id=project_id) \
-            .options(db.joinedload(Interface.params), db.joinedload(Interface.cases)) \
-            .all()
+        # 1. 查询项目是否存在
+        project = Project.query.get(project_id)
+        if not project:
+            return jsonify({"code": 404, "msg": "项目不存在"}), 404
 
-        # 组装接口数据（包含参数、用例）
+        # 2. 查询该项目下的所有接口
+        interfaces = Interface.query.filter_by(project_id=project_id).all()
+        if not interfaces:
+            return jsonify({"code": 200, "data": [], "msg": "该项目下暂无接口"}), 200
+
+        # 3. 组装接口数据（包含关联的接口参数）
         interface_list = []
         for interface in interfaces:
-            interface_list.append({
-                "interface": {
-                    "id": interface.interface_id,
-                    "name": interface.interface_name,
-                    "url": interface.url,
-                    "method": interface.method
-                },
-                "params": [{"id": p.param_id, "name": p.param_name} for p in interface.params],
-                "cases": [{"id": c.case_id, "name": c.case_name} for c in interface.cases]
-            })
+            # 查询接口关联的参数
+            params = InterfaceParam.query.filter_by(interface_id=interface.interface_id).all()
+            param_list = [
+                {
+                    "param_id": p.param_id,
+                    "param_name": p.param_name,
+                    "param_type": p.param_type.value,  # 枚举转字符串
+                    "data_type": p.data_type,
+                    "is_required": p.is_required,
+                    "constraint": p.constraint,
+                    "example_value": p.example_value
+                }
+                for p in params
+            ]
 
-        return jsonify({"code": 200, "data": interface_list})
+            # 4. 转换 method 为大写（核心修改）
+            #    如果是枚举值，先取 value 再转大写；如果是字符串，直接转大写
+            method_upper = interface.method.value.upper() if hasattr(interface.method, 'value') else interface.method.upper()
+
+            # 组装接口信息
+            interface_info = {
+                "interface_id": interface.interface_id,
+                "interface_name": interface.interface_name,
+                "url": interface.url,
+                "method": method_upper,  # 使用转换后的大写 method
+                "request_header": interface.request_header,
+                "create_time": interface.create_time.strftime('%Y-%m-%d %H:%M:%S'),  # 格式化时间
+                "params": param_list  # 关联的参数列表
+            }
+            interface_list.append(interface_info)
+
+        return jsonify({"code": 200, "data": interface_list}), 200
 
     except Exception as e:
-        return jsonify({"code": 500, "msg": f"查询接口失败：{str(e)}"}), 500
-
+        # 记录详细错误日志（生产环境建议用 logging 模块）
+        print(f"查询项目接口失败: {str(e)}")
+        return jsonify({"code": 500, "msg": f"服务器内部错误: {str(e)}"}), 500
 
 # --------------------- 上传及解析逻辑 ---------------------
 @main_bp.route('/api/import-excel', methods=['POST'])
