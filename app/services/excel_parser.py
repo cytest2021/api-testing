@@ -9,9 +9,10 @@ from sqlalchemy.exc import IntegrityError
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
+
 def parse_excel(file, project_id, creator_id):
     """
-    解析 Excel 接口文档，关联接口参数与测试用例
+    解析 Excel 接口文档，关联接口参数与测试用例，支持区分参数类型（query/body/header 等）
     :param file: 上传的文件对象
     :param project_id: 项目 ID（关联 Project 表）
     :param creator_id: 测试用例创建者 ID（关联 User 表）
@@ -43,6 +44,9 @@ def parse_excel(file, project_id, creator_id):
                 header_mapping['request_body'] = idx
             elif '响应' in header_lower or 'response' in header_lower:
                 header_mapping['response_result'] = idx  # 标记响应结果表头
+            # 新增对“参数类型”表头的支持
+            elif '参数类型' in header_lower or 'param type' in header_lower:
+                header_mapping['param_type'] = idx
 
         # 校验必要字段
         required_fields = ['interface_name', 'url', 'method']
@@ -95,14 +99,16 @@ def parse_excel(file, project_id, creator_id):
                 db.session.commit()  # 提交获取 interface_id
                 interface_count += 1
 
-                # 4. 解析参数并关联到接口（支持嵌套）
+                # 4. 解析参数并关联到接口（支持嵌套，区分参数类型）
                 request_body_str = row_data[header_mapping.get('request_body')] or '{}'
                 try:
                     request_body = json.loads(request_body_str)
+                    # 获取当前行的参数类型，若未配置则默认 'body'
+                    row_param_type = row_data[header_mapping.get('param_type')] if 'param_type' in header_mapping else 'body'
                     parse_nested_params(
                         interface_id=interface.interface_id,
                         data=request_body,
-                        param_type='body'
+                        param_type=row_param_type
                     )
                     param_count += count_nested_params(request_body)  # 统计参数数量
                 except json.JSONDecodeError as e:
@@ -135,10 +141,10 @@ def parse_excel(file, project_id, creator_id):
 
 def parse_nested_params(interface_id, data, param_type, parent_key=''):
     """
-    递归解析嵌套参数，支持 JSON 层级
+    递归解析嵌套参数，支持 JSON 层级，使用 Excel 中定义的 param_type
     :param interface_id: 接口 ID
     :param data: JSON 数据（dict）
-    :param param_type: 参数类型（path/query/body/header）
+    :param param_type: 参数类型（path/query/body/header 等，来自 Excel 配置）
     :param parent_key: 嵌套层级（如 "data.user"）
     """
     if not isinstance(data, dict):
@@ -149,7 +155,7 @@ def parse_nested_params(interface_id, data, param_type, parent_key=''):
         # 推断数据类型
         data_type = type(value).__name__ if not isinstance(value, (dict, list)) else 'object'
 
-        # 创建参数记录
+        # 创建参数记录，使用传入的 param_type
         param = InterfaceParam(
             interface_id=interface_id,
             param_name=full_key,

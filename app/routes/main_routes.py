@@ -51,13 +51,8 @@ def get_all_projects():
 
         # 组装项目数据（仅返回必要字段，也可扩展项目描述等）
         project_list = [{"id": p.project_id, "name": p.project_name} for p in projects]
-        return jsonify({"code": 200, "data": project_list})
-
         # 手动打印查询结果
-        projects = Project.query.all()
         print("数据库查询到的项目：", [p.project_name for p in projects])
-
-        project_list = [{"id": p.project_id, "name": p.project_name} for p in projects]
         return jsonify({"code": 200, "data": project_list})
 
     except Exception as e:
@@ -65,8 +60,6 @@ def get_all_projects():
 
 
 # --------------------- 调整：获取指定项目的接口数据 ---------------------
-from sqlalchemy.orm import joinedload  # 导入预加载工具
-
 @main_bp.route('/api/project/<int:project_id>/interfaces', methods=['GET'])
 def get_project_interfaces(project_id):
     try:
@@ -128,6 +121,7 @@ def get_project_interfaces(project_id):
         print(f"查询项目接口失败: {str(e)}")
         return jsonify({"code": 500, "msg": f"服务器内部错误: {str(e)}"}), 500
 
+
 # --------------------- 上传及解析逻辑 ---------------------
 @main_bp.route('/api/import-excel', methods=['POST'])
 def handle_import():
@@ -163,7 +157,7 @@ def handle_import():
         new_project = Project(
             project_name=project_name,
             description="通过Excel导入创建",
-            owner_id=current_user.user_id,
+            creator_id=current_user.user_id,
             create_time=datetime.datetime.now()
         )
         db.session.add(new_project)
@@ -189,7 +183,6 @@ def handle_import():
     except Exception as e:
         db.session.rollback()
         return jsonify({"result": f"服务器错误：{str(e)}"}), 500
-
 
 
 # --------------------- 数据更新接口 ---------------------
@@ -267,3 +260,65 @@ def update_case(case_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({"code": 500, "msg": f"更新失败：{str(e)}"}), 500
+
+
+# --------------------- 项目管理功能（新增） ---------------------
+# 更新项目
+@main_bp.route('/api/projects/<int:project_id>', methods=['PUT'])
+def update_project(project_id):
+    project = Project.query.get(project_id)
+    if not project:
+        return jsonify({"code": 404, "msg": "项目不存在"}), 404
+
+    data = request.get_json()
+    if 'project_name' in data:
+        project.project_name = data['project_name']
+    if 'description' in data:
+        project.description = data['description']
+    db.session.commit()
+    return jsonify({"code": 200, "msg": "项目已更新"})
+
+
+# --------------------- 用例管理功能（新增） ---------------------
+# 获取接口下的用例列表
+@main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
+def get_interface_cases(interface_id):
+    cases = TestCase.query.filter_by(interface_id=interface_id).all()
+    return jsonify({
+        "code": 200,
+        "data": [
+            {
+                "case_id": c.case_id,
+                "case_name": c.case_name,
+                "param_values": c.param_values,
+                "expected_result": c.expected_result,
+                "assert_rule": c.assert_rule,
+                "create_time": c.create_time.strftime("%Y-%m-%d %H:%M:%S")
+            } for c in cases
+        ]
+    })
+
+
+# --------------------- 路由与页面关联调整（新增） ---------------------
+# 项目管理页面
+@main_bp.route('/project-management')
+def project_management():
+    return render_template('project_management.html')
+
+
+# 用例列表页面
+@main_bp.route('/case/list/<int:interface_id>')
+def case_list(interface_id):
+    return render_template('case_list.html', interface_id=interface_id)
+
+
+# 生成用例接口（示例，需结合实际生成逻辑完善）
+@main_bp.route('/api/generate-cases', methods=['POST'])
+def generate_test_cases():
+    interface_id = request.args.get('interface_id')
+    if not interface_id:
+        return jsonify({"code": 400, "msg": "接口ID不能为空"}), 400
+
+    # 这里需补充实际生成用例的逻辑，比如调用相关服务生成用例并入库
+    # 示例伪代码：generate_cases(interface_id, current_user.user_id)
+    return jsonify({"code": 200, "msg": "用例生成逻辑待完善"}), 200
