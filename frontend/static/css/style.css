@@ -1,0 +1,67 @@
+/* 左侧导航栏样式 */
+.sidebar {
+    width: 220px;          /* 固定宽度 */
+    min-height: 100vh;     /* 占满视口高度 */
+    padding: 1rem;
+}
+
+/* 导航项激活样式（高亮） */
+.nav-link.active {
+    background-color: #007bff;
+    color: #fff !important;
+    border-radius: 4px;
+}
+
+/* 右侧内容区域自适应 */
+.flex-fill {
+    flex: 1;
+    overflow-y: auto;      /* 内容超出时滚动 */
+}
+
+/* 响应式适配（小屏幕折叠导航） */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        min-height: auto;
+    }
+    .d-flex {
+        flex-direction: column;
+    }
+}
+
+/* 左侧导航栏样式优化，让选中项更突出 */
+.sidebar .nav-link.active {
+  background-color: #007bff;
+  color: #fff !important;
+  border-radius: 4px;
+}
+
+/* 左侧导航激活项样式优化（可选） */
+.sidebar .nav-link.active {
+    background-color: #007bff;
+    color: #fff !important;
+}
+
+/* 顶部导航栏样式：设置为较深的橘黄色 */
+.navbar {
+    background-color: #FF9933 !important; /* 较深的橘黄色，可根据实际需求微调色调 */
+}
+.navbar-brand {
+    color: #FFFFFF !important; /* 设置品牌名称（接口测试平台）为白色，增加对比度 */
+}
+
+/* 顶部导航栏 - 深蓝色 */
+.navbar {
+    background-color: #165DFF !important; /* 主深蓝色 */
+}
+
+.navbar-brand {
+    color: #FFFFFF !important; /* 白色文字，提高对比度 */
+    font-weight: 600; /* 稍微加粗标题 */
+}
+
+/* 左侧侧边栏 - 浅蓝色 */
+.sidebar {
+    background-color: #E8F3FF !important; /* 浅蓝色背景 */
+    border-right: 1px solid #D0E4FF; /* 右侧边框，增强分隔感 */
+}

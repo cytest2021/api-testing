@@ -25,16 +25,6 @@ def test_case_generate():
     return render_template('test_case_generate.html')
 
 
-@main_bp.route('/dependency-manage')
-def dependency_manage():
-    return render_template('dependency_manage.html')
-
-
-@main_bp.route('/test-execution')
-def test_execution():
-    return render_template('test_execution.html')
-
-
 @main_bp.route('/case/edit/<int:project_id>')
 def edit_case(project_id):
     return render_template('edit_case.html', project_id=project_id)
