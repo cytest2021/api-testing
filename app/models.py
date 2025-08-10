@@ -99,12 +99,6 @@ class Interface(db.Model):
         UniqueConstraint('project_id', 'interface_name', name='unique_interface_in_project'),
     )
 
-    # 校验 URL 格式（示例）
-    @validates('url')
-    def validate_url(self, key, value):
-        if not value.startswith(('http://', 'https://')):
-            raise ValueError("URL 必须以 http:// 或 https:// 开头")
-        return value
 
 # 4. 接口参数表（细化入参规则，支持嵌套）
 class InterfaceParam(db.Model):
@@ -120,12 +114,12 @@ class InterfaceParam(db.Model):
     constraint = db.Column(db.String(500), nullable=True)  # 参数约束（长度、范围等）
 
     # 约束：确保参数类型有效
-    __table_args__ = (
-        CheckConstraint(
-            "param_type IN ('path', 'query', 'body', 'header', 'response')",
-            name="valid_param_type"
-        ),
-    )
+    # __table_args__ = (
+    #     CheckConstraint(
+    #         "param_type IN ('path', 'query', 'body', 'header', 'response')",
+    #         name="valid_param_type"
+    #     ),
+    # )
 
     # 校验 data_type 合理性（示例）
     @validates('data_type')

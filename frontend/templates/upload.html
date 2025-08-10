@@ -1,7 +1,7 @@
 {% extends "index.html" %} 
 {% block content %}
 <div class="container mt-5">
-    <h3>导入Excel接口文档</h3>
+    <h3>导入接口文档</h3>
     <!-- 上传表单 -->
     <form id="uploadForm" enctype="multipart/form-data" class="mt-4">
         <div class="mb-3">
@@ -16,18 +16,32 @@
             />
         </div>
 
+        <!-- 项目描述输入框 -->
         <div class="mb-3">
-            <label for="excelFile" class="form-label">选择Excel文件</label>
+            <label for="projectDesc" class="form-label">项目描述</label>
+            <textarea
+                class="form-control"
+                id="projectDesc"
+                name="project_desc"
+                rows="3"
+                placeholder="输入项目描述（可选）"
+            ></textarea>
+        </div>
+
+        <div class="mb-3">
+            <label for="apiFile" class="form-label">选择接口文件</label>
             <input
                 type="file"
                 class="form-control"
-                id="excelFile"
+                id="apiFile"
                 name="file"
-                accept=".xlsx, .xls"
+                accept=".xlsx, .xls, .json"
                 required
             />
             <small class="text-muted"
-                >支持.xlsx和.xls格式，表头需包含：接口名称、URL、方法、参数名、参数类型、是否必填、数据类型</small
+                >支持的格式：
+                <br>- Excel(.xlsx, .xls)：表头需包含接口名称、URL、请求方法、请求头、请求体、响应结果
+                <br>- Postman(.json)：支持Postman导出的Collections格式</small
             >
         </div>
 
@@ -39,78 +53,125 @@
 </div>
 
 <script>
-  document
-    .getElementById("uploadForm")
-    .addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const formData = new FormData(e.target);
-      const resultDiv = document.getElementById("result");
-      const submitButton = e.submitter;
+  document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const resultDiv = document.getElementById("result");
+    const submitButton = e.submitter;
+    const fileInput = document.getElementById("apiFile");
 
-      try {
-        // 禁用按钮防止重复提交
-        submitButton.disabled = true;
-        submitButton.textContent = "上传中...";
+    // 重置结果区域
+    resultDiv.className = "mt-4 p-3 rounded border d-none";
+    resultDiv.textContent = "";
 
-        // 请求头配置
-        const headers = {
-          "X-Import-Source": "Excel-Upload",
-          Accept: "application/json",
-        };
-
-        // 发送请求，注意路由要对应蓝图命名空间，这里假设 main 蓝图已正确注册
-        const response = await fetch(
-          "{{ url_for('main.handle_import') }}", 
-          {
-            method: "POST",
-            body: formData,
-            headers: headers,
-          }
-        );
-
-        // 处理响应
-        if (!response.ok) {
-          throw new Error(`HTTP错误，状态码: ${response.status}`);
-        }
-
-        const data = await response.json();
-
-        // 显示成功提示并处理跳转
-        if (data.success) {
-          resultDiv.className =
-            "mt-4 p-3 rounded border border-success bg-success bg-opacity-10";
-          resultDiv.textContent =
-            "上传接口成功，即将跳转到接口管理页面...";
-          resultDiv.classList.remove("d-none");
-
-          // 延迟1.5秒后跳转到 interface_management 路由对应的页面，用 url_for 更稳妥
-          setTimeout(() => {
-            window.location.href = "{{ url_for('main.interface_management') }}";
-          }, 1500);
-        } else if (data.result?.includes("解析完成")) {
-          resultDiv.className =
-            "mt-4 p-3 rounded border border-success bg-success bg-opacity-10";
-          resultDiv.textContent = "上传接口成功";
-          resultDiv.classList.remove("d-none");
-        } else {
-          resultDiv.className =
-            "mt-4 p-3 rounded border border-warning bg-warning bg-opacity-10";
-          resultDiv.textContent =
-            data.result || "上传完成，但未解析到接口数据";
-          resultDiv.classList.remove("d-none");
-        }
-      } catch (error) {
-        resultDiv.className =
-          "mt-4 p-3 rounded border border-danger bg-danger bg-opacity-10";
-        resultDiv.textContent = "上传失败：" + error.message;
-        resultDiv.classList.remove("d-none");
-      } finally {
-        // 恢复按钮状态（如果没有跳转的话）
-        if (!resultDiv.textContent.includes("即将跳转")) {
-          submitButton.disabled = false;
-          submitButton.textContent = "上传并解析";
-        }
+    try {
+      // 前端基本验证
+      if (!fileInput.files.length) {
+        showError("请选择要上传的文件");
+        return;
       }
-    });
+
+      // 获取文件信息
+      const file = fileInput.files[0];
+      const fileName = file.name.toLowerCase();
+      let fileType = '';
+
+      // 严格判断文件类型
+      if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        fileType = 'excel';
+      } else if (fileName.endsWith('.json')) {
+        fileType = 'postman';
+      } else {
+        showError("不支持的文件格式，请选择 .xlsx、.xls 或 .json 格式的文件");
+        return;
+      }
+
+      // 禁用按钮防止重复提交
+      submitButton.disabled = true;
+      submitButton.textContent = "上传中...";
+
+      // 发送请求，明确设置请求头传递文件类型
+      const response = await fetch("{{ url_for('main.handle_import') }}", {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-File-Type": fileType, // 关键：传递文件类型到后端
+          "Accept": "application/json"
+        },
+      });
+
+      // 解析响应
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        throw new Error("服务器返回格式错误，无法解析");
+      }
+
+      // 处理不同响应状态
+      if (response.ok) {
+        // HTTP状态码正常的情况
+        if (data.success) {
+          if (data.parse_success) {
+            // 完全成功 - 显示成功信息并跳转
+            resultDiv.className = "mt-4 p-3 rounded border border-success bg-success bg-opacity-10";
+            resultDiv.textContent = `上传并解析${fileType === 'excel' ? 'Excel' : 'Postman'}接口成功，即将跳转到接口管理页面...`;
+            resultDiv.classList.remove("d-none");
+
+            // 延迟跳转
+            setTimeout(() => {
+              window.location.href = "{{ url_for('main.interface_management') }}";
+            }, 1500);
+          } else {
+            // 解析失败 - 显示详细错误信息
+            const errorMsg = data.error || `${fileType === 'excel' ? 'Excel' : 'Postman'}解析失败，请检查文件格式和内容`;
+            // 处理表头或格式错误的情况
+            if (fileType === 'excel' && (errorMsg.includes("缺少必要表头") || errorMsg.includes("表头"))) {
+              resultDiv.textContent = `解析失败：Excel 表头异常 - ${errorMsg}`;
+            } else if (fileType === 'postman' && errorMsg.includes("格式")) {
+              resultDiv.textContent = `解析失败：Postman JSON 格式异常 - ${errorMsg}`;
+            } else {
+              resultDiv.textContent = `解析失败：${errorMsg}`;
+            }
+            resultDiv.className = "mt-4 p-3 rounded border border-danger bg-danger bg-opacity-10";
+            resultDiv.classList.remove("d-none");
+            // 恢复按钮状态
+            submitButton.disabled = false;
+            submitButton.textContent = "重新上传";
+          }
+        } else {
+          // 服务器接收请求失败（参数错误等）
+          resultDiv.className = "mt-4 p-3 rounded border border-warning bg-warning bg-opacity-10";
+          resultDiv.textContent = `操作失败：${data.error || "请检查输入信息后重试"}`;
+          resultDiv.classList.remove("d-none");
+          submitButton.disabled = false;
+          submitButton.textContent = "重新上传";
+        }
+      } else {
+        // HTTP状态码异常的情况
+        throw new Error(`服务器错误 (${response.status})：${data.error || "请稍后重试"}`);
+      }
+    } catch (error) {
+      // 网络错误或其他异常
+      resultDiv.className = "mt-4 p-3 rounded border border-danger bg-danger bg-opacity-10";
+      resultDiv.textContent = `上传失败：${error.message}`;
+      resultDiv.classList.remove("d-none");
+      submitButton.disabled = false;
+      submitButton.textContent = "上传并解析";
+    }
+  });
+
+  // 辅助函数：显示错误信息
+  function showError(message) {
+    const resultDiv = document.getElementById("result");
+    resultDiv.className = "mt-4 p-3 rounded border border-danger bg-danger bg-opacity-10";
+    resultDiv.textContent = message;
+    resultDiv.classList.remove("d-none");
+
+    // 恢复按钮状态
+    const submitButton = document.querySelector("#uploadForm button[type='submit']");
+    submitButton.disabled = false;
+    submitButton.textContent = "上传并解析";
+  }
 </script>
 {% endblock %}
