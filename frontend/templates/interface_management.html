@@ -1,8 +1,9 @@
 {% extends "index.html" %}  <!-- 继承主布局，确保侧边栏等样式一致 -->
 
 {% block content %}
+<meta charset="UTF - 8">
 <div class="container my-4">
-    <h2>接口管理</h2>
+<!--    <h2>接口管理</h2>-->
 
     <!-- 项目列表（左侧） -->
     <div class="row">
@@ -134,8 +135,10 @@ function renderInterfaces(interfaces) {
                     <th>接口名称</th>
                     <th>请求URL</th>
                     <th>请求方法</th>
-                    <th>参数</th>
-                    <th>测试用例</th>
+                    <th>请求头</th>  <!-- 新增列 -->
+                    <th>请求参数</th>
+                    <th>参数值</th>   <!-- 新增列 -->
+                    <th>响应结果</th> <!-- 新增列 -->
                 </tr>
             </thead>
             <tbody>
@@ -144,11 +147,15 @@ function renderInterfaces(interfaces) {
                         <td>${interface.interface.name}</td>
                         <td>${interface.interface.url}</td>
                         <td>${interface.interface.method}</td>
+                        <td>${interface.interface.request_header || '-'}</td>  <!-- 显示请求头 -->
                         <td>
-                            ${interface.params.map(param => param.name).join('<br>')}
+                            ${interface.params.map(param => param.param_name).join('<br>') || '-'}
                         </td>
                         <td>
-                            ${interface.test_cases.map(caseItem => caseItem.name).join('<br>')}
+                            ${interface.params.map(param => param.example_value || '-').join('<br>')}
+                        </td>
+                        <td>
+                            ${interface.cases.map(caseItem => caseItem.expected_result || '-').join('<br>')}
                         </td>
                     </tr>
                 `).join('')}

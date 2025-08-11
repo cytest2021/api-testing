@@ -3,7 +3,7 @@ from datetime import datetime
 from flask_login import UserMixin
 from enum import Enum, auto
 from sqlalchemy import CheckConstraint, UniqueConstraint
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import validates, selectinload
 from sqlalchemy import and_
 
 
@@ -39,7 +39,7 @@ class User(db.Model, UserMixin):
     __tablename__ = 'user'
     user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(50), nullable=False, unique=True)
-    password = db.Column(db.String(100), nullable=False)
+    password = db.Column(db.String(100), nullable=True)
     role = db.Column(db.Enum('admin', 'regular', 'viewer'), default='regular', nullable=False)
     create_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
     update_time = db.Column(db.DateTime, onupdate=datetime.now)  # 记录信息更新时间
@@ -55,6 +55,12 @@ class User(db.Model, UserMixin):
 
     def get_id(self):
         return str(self.user_id)
+
+    def __init__(self, user_id, username, role, create_time):
+        self.user_id = user_id
+        self.username = username
+        self.role = role
+        self.create_time = create_time
 
 # 2. 项目表（组织接口、用例的层级容器）
 class Project(db.Model):
@@ -89,10 +95,20 @@ class Interface(db.Model):
     request_header = db.Column(db.Text, nullable=True)  # 存储 JSON 格式请求头
     create_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
-    # 关系：接口关联的参数（反向关联 InterfaceParam.interface）
-    params = db.relationship('InterfaceParam', backref='interface', lazy='dynamic', cascade='all, delete-orphan')
-    # 关系：接口关联的测试用例（反向关联 TestCase.interface）
-    test_cases = db.relationship('TestCase', backref='interface', lazy='dynamic', cascade='all, delete-orphan')
+    # 关键修改：将 lazy 改为 'selectin'，支持预加载时的对象填充
+    params = db.relationship(
+        'InterfaceParam',
+        backref='interface',
+        lazy='selectin',  # 使用 selectin 模式，兼容对象填充
+        cascade='all, delete-orphan'
+    )
+    # 关键修改：将 test_cases 的 lazy 改为 'dynamic'，临时关闭自动预加载
+    test_cases = db.relationship(
+        'TestCase',
+        backref='interface',
+        lazy='dynamic',  # 仅在显式调用 .all()/.filter() 时加载
+        cascade='all, delete-orphan'
+    )
 
     # 项目内接口名称唯一约束
     __table_args__ = (
@@ -112,14 +128,6 @@ class InterfaceParam(db.Model):
     parent_key = db.Column(db.String(200), nullable=True)  # 嵌套层级（如 "data.user"）
     example_value = db.Column(db.Text, nullable=True)  # 示例值
     constraint = db.Column(db.String(500), nullable=True)  # 参数约束（长度、范围等）
-
-    # 约束：确保参数类型有效
-    # __table_args__ = (
-    #     CheckConstraint(
-    #         "param_type IN ('path', 'query', 'body', 'header', 'response')",
-    #         name="valid_param_type"
-    #     ),
-    # )
 
     # 校验 data_type 合理性（示例）
     @validates('data_type')
@@ -214,4 +222,3 @@ class TestResult(db.Model):
     actual_response = db.Column(db.Text, nullable=True)  # 实际响应内容
     duration = db.Column(db.Float, nullable=True)  # 执行耗时（秒）
     error_msg = db.Column(db.Text, nullable=True)  # 错误信息（失败/异常时）
-

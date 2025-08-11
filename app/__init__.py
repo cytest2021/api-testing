@@ -38,8 +38,8 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(user_id):
-        # 返回 ID 为 1 的用户，需确保数据库有该数据；若无数据，可直接实例化 User（需适配 __init__ 参数）
-        return User.query.get(1)
+        # 这里假设手动创建的用户已存在于数据库，或直接返回该用户
+        return User.query.get(int(user_id))  # 或直接返回手动创建的 user（若固定为 user_id=1）
 
     db.init_app(app)  # 初始化数据库
 

@@ -2,9 +2,10 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from app.services.excel_parser import parse_excel
 from app.services.postman_parser import PostmanParser
 from app.models import db, Project, User, Interface, InterfaceParam, TestCase
-from flask_login import current_user, login_user, UserMixin
+from flask_login import current_user, login_user
 import datetime
 from sqlalchemy.orm import joinedload
+
 
 main_bp = Blueprint('main', __name__)
 
@@ -42,7 +43,7 @@ def get_all_projects():
     except Exception as e:
         return jsonify({"code": 500, "msg": f"查询项目失败：{str(e)}"}), 500
 
-# --------------------- 调整：获取指定项目的接口数据 ---------------------
+# --------------------- 调整：获取指定项目的接口数据（按需加载 TestCase） ---------------------
 @main_bp.route('/api/project/<int:project_id>/interfaces', methods=['GET'])
 def get_project_interfaces(project_id):
     try:
@@ -50,11 +51,10 @@ def get_project_interfaces(project_id):
         if not project:
             return jsonify({"code": 404, "msg": "项目不存在"}), 404
 
+        # 关键修改：仅加载 Interface 和 params，不主动加载 test_cases
         interfaces = Interface.query.filter_by(project_id=project_id)\
-            .options(
-                joinedload(Interface.params),
-                joinedload(Interface.test_cases)
-            ).all()
+            .options(joinedload(Interface.params))\
+            .all()
 
         if not interfaces:
             return jsonify({"code": 200, "data": [], "msg": "该项目下暂无接口"}), 200
@@ -74,25 +74,19 @@ def get_project_interfaces(project_id):
                 for p in interface.params
             ]
 
-            case_list = [
-                {
-                    "case_id": c.case_id,
-                    "case_name": c.case_name
-                }
-                for c in interface.test_cases
-            ]
-
-            method_upper = interface.method.value.upper() if hasattr(interface.method, 'value') else interface.method.upper()
+            # 关键修改：正确处理枚举类型的 method（直接取枚举名称并大写）
+            method_upper = interface.method.name.upper()
 
             interface_info = {
                 "interface": {
                     "id": interface.interface_id,
                     "name": interface.interface_name,
                     "url": interface.url,
-                    "method": method_upper
+                    "method": method_upper,  # 使用修正后的 method
+                    "request_header": interface.request_header
                 },
                 "params": param_list,
-                "cases": case_list
+                "cases": []  # 暂时返回空列表，后续按需填充
             }
             interface_list.append(interface_info)
 
@@ -100,6 +94,8 @@ def get_project_interfaces(project_id):
     except Exception as e:
         print(f"查询项目接口失败: {str(e)}")
         return jsonify({"code": 500, "msg": f"服务器内部错误: {str(e)}"}), 500
+
+
 
 # --------------------- 合并后的上传及解析逻辑 ---------------------
 @main_bp.route('/api/import', methods=['POST'])
@@ -113,19 +109,28 @@ def handle_import():
 
     try:
         # 1. 用户身份处理
-        user = User(
-            user_id=1,
-            username="fixed_user",
-            role='admin',
-            create_time=datetime.datetime.now()
-        )
-        login_user(user)
+        # 检查current_user是否已登录且有user_id属性
         if not current_user or not hasattr(current_user, 'user_id'):
-            response["error"] = "请先登录"
-            return jsonify(response), 401
-        if current_user.user_id is None:
+            # 若未登录，创建并登录固定用户
+            user = User(
+                user_id=1,
+                username="fixed_user",
+                role='admin',
+                create_time=datetime.datetime.now()
+            )
+            # 添加用户到数据库（如果需要）
+            existing_user = User.query.filter_by(user_id=1).first()
+            if not existing_user:
+                db.session.add(user)
+                db.session.commit()
+            login_user(user)
+        # 再次检查用户信息
+        if not current_user or current_user.user_id is None:
             response["error"] = "用户信息异常，请重新登录"
             return jsonify(response), 401
+
+        print(f"current_user 类型: {type(current_user)}")
+        print(f"current_user.user_id: {current_user.user_id}")
 
         # 2. 项目名称 & 描述校验
         project_name = request.form.get('project_name')
@@ -163,7 +168,7 @@ def handle_import():
             db.session.add(new_project)
             db.session.commit()
             project_id = new_project.project_id
-            parse_result = parse_excel(file, project_id, user.user_id)
+            parse_result = parse_excel(file, project_id, current_user.user_id)
             if not parse_result["success"]:
                 db.session.delete(new_project)
                 db.session.commit()
@@ -176,7 +181,8 @@ def handle_import():
             # 5. 解析 Postman JSON
             parser = PostmanParser(file, project_name, project_desc)
             project = parser.parse()
-            project_id = project.id
+            # 因为parser.parse()返回的是字典，所以取project_id要从字典中获取
+            project_id = project["project_id"]
         else:
             response["error"] = "不支持的文件类型"
             return jsonify(response), 400
@@ -278,9 +284,10 @@ def update_project(project_id):
     db.session.commit()
     return jsonify({"code": 200, "msg": "项目已更新"})
 
-# --------------------- 用例管理功能（新增） ---------------------
+# --------------------- 用例管理功能（新增，按需获取用例） ---------------------
 @main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
 def get_interface_cases(interface_id):
+    # 显式加载指定接口的用例
     cases = TestCase.query.filter_by(interface_id=interface_id).all()
     return jsonify({
         "code": 200,
