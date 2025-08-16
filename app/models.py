@@ -37,6 +37,11 @@ class ParamType(Enum):
 # 1. 用户表（系统用户，区分角色）
 class User(db.Model, UserMixin):
     __tablename__ = 'user'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = {
+        "mysql_charset": "utf8mb4",
+        "mysql_collate": "utf8mb4_unicode_ci"
+    }
     user_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(50), nullable=False, unique=True)
     password = db.Column(db.String(100), nullable=True)
@@ -65,6 +70,11 @@ class User(db.Model, UserMixin):
 # 2. 项目表（组织接口、用例的层级容器）
 class Project(db.Model):
     __tablename__ = 'project'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = (
+        UniqueConstraint('project_name', 'status', name='unique_project_name_status'),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    )
     project_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     project_name = db.Column(db.String(100), nullable=False, unique=True)  # 项目名称唯一
     description = db.Column(db.Text, nullable=True)
@@ -79,14 +89,14 @@ class Project(db.Model):
     # 关系：项目包含的接口（反向关联 Interface.project）
     interfaces = db.relationship('Interface', backref='project', lazy='dynamic', cascade='all, delete-orphan')
 
-    # 联合约束：项目名称 + 状态 唯一性（避免同名项目重复创建）
-    __table_args__ = (
-        UniqueConstraint('project_name', 'status', name='unique_project_name_status'),
-    )
-
 # 3. 接口表（存储接口基础信息，关联项目）
 class Interface(db.Model):
     __tablename__ = 'interface'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = (
+        UniqueConstraint('project_id', 'interface_name', name='unique_interface_in_project'),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    )
     interface_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     project_id = db.Column(db.Integer, db.ForeignKey('project.project_id'), nullable=False)  # 关联项目
     interface_name = db.Column(db.String(100), nullable=False)  # 接口名称（项目内唯一）
@@ -110,15 +120,14 @@ class Interface(db.Model):
         cascade='all, delete-orphan'
     )
 
-    # 项目内接口名称唯一约束
-    __table_args__ = (
-        UniqueConstraint('project_id', 'interface_name', name='unique_interface_in_project'),
-    )
-
-
 # 4. 接口参数表（细化入参规则，支持嵌套）
 class InterfaceParam(db.Model):
     __tablename__ = 'interface_param'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = {
+        "mysql_charset": "utf8mb4",
+        "mysql_collate": "utf8mb4_unicode_ci"
+    }
     param_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     interface_id = db.Column(db.Integer, db.ForeignKey('interface.interface_id'), nullable=False)  # 关联接口
     param_name = db.Column(db.String(100), nullable=False)  # 支持嵌套命名（如 data.user.name）
@@ -140,17 +149,17 @@ class InterfaceParam(db.Model):
 # 7. 依赖关系表（管理接口/用例的依赖）
 class Dependency(db.Model):
     __tablename__ = 'dependency'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = (
+        db.UniqueConstraint('source_type', 'source_id', 'target_type', 'target_id', name='unique_dependency'),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    )
     dep_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     source_type = db.Column(db.Enum('interface', 'case'), nullable=False)  # 依赖源类型（接口/用例）
     source_id = db.Column(db.Integer, nullable=False)  # 依赖源 ID
     target_type = db.Column(db.Enum('interface', 'case'), nullable=False)  # 依赖目标类型
     target_id = db.Column(db.Integer, nullable=False)  # 依赖目标 ID
     dep_desc = db.Column(db.String(200), nullable=True)  # 依赖描述
-
-    # 联合唯一约束：避免重复依赖关系
-    __table_args__ = (
-        db.UniqueConstraint('source_type', 'source_id', 'target_type', 'target_id', name='unique_dependency'),
-    )
 
     # 校验依赖类型合理性（示例）
     @validates('source_type', 'target_type')
@@ -163,6 +172,11 @@ class Dependency(db.Model):
 # 5. 测试用例表（核心用例配置，关联接口和参数）
 class TestCase(db.Model):
     __tablename__ = 'test_case'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = (
+        db.UniqueConstraint('interface_id', 'case_name', name='unique_case_in_interface'),
+        {"mysql_charset": "utf8mb4", "mysql_collate": "utf8mb4_unicode_ci"}
+    )
     case_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     interface_id = db.Column(db.Integer, db.ForeignKey('interface.interface_id'), nullable=False)
     case_name = db.Column(db.String(100), nullable=False)
@@ -199,11 +213,6 @@ class TestCase(db.Model):
         cascade='all, delete-orphan'
     )
 
-    # 接口内用例名称唯一约束
-    __table_args__ = (
-        db.UniqueConstraint('interface_id', 'case_name', name='unique_case_in_interface'),
-    )
-
     def get_param_mapping(self):
         """解析 param_values 为字典（兼容空值）"""
         import json
@@ -215,6 +224,11 @@ class TestCase(db.Model):
 # 6. 测试结果表（记录用例执行结果）
 class TestResult(db.Model):
     __tablename__ = 'test_result'
+    # 新增：指定表字符集为 utf8mb4
+    __table_args__ = {
+        "mysql_charset": "utf8mb4",
+        "mysql_collate": "utf8mb4_unicode_ci"
+    }
     result_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     case_id = db.Column(db.Integer, db.ForeignKey('test_case.case_id'), nullable=False)  # 关联用例
     exec_time = db.Column(db.DateTime, default=datetime.now, nullable=False)

@@ -1,0 +1,303 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container-fluid p-0" style="height: 100vh;">
+  <div class="row g-0 h-100">
+    <!-- 右侧接口编辑区域（占据整个宽度，删除左侧项目树） -->
+    <div class="col-12 h-100 overflow-auto">
+      <div class="p-4" id="interfaceEdit">
+        <h5 class="fw-bold mb-4">接口编辑</h5>
+        <!-- 接口基本信息编辑 -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">接口基本信息</h6>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label for="interfaceName" class="form-label">接口名称</label>
+                <input type="text" class="form-control" id="interfaceName" value="{{ interface.name }}">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="interfaceUrl" class="form-label">请求 URL</label>
+                <input type="text" class="form-control" id="interfaceUrl" value="{{ interface.url }}">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label for="interfaceMethod" class="form-label">请求方法</label>
+                <select class="form-control" id="interfaceMethod">
+                  <option value="GET" {% if interface.method == 'GET' %}selected{% endif %}>GET</option>
+                  <option value="POST" {% if interface.method == 'POST' %}selected{% endif %}>POST</option>
+                  <option value="PUT" {% if interface.method == 'PUT' %}selected{% endif %}>PUT</option>
+                  <option value="DELETE" {% if interface.method == 'DELETE' %}selected{% endif %}>DELETE</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 请求头参数编辑 -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">请求头参数</h6>
+            <button class="btn btn-sm btn-primary" onclick="addHeaderParam()">添加请求头参数</button>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm table-bordered" id="headerParamsTable">
+              <thead>
+                <tr>
+                  <th style="width: 8em;">参数名</th>
+                  <th style="width: 8em;">数据类型</th>
+                  <th style="width: 8em;">是否必填</th>
+                  <th style="width: 20em;">示例值</th>
+                  <th style="width: 8em;">约束</th>
+                  <th style="width: 6em;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for param in interface.header_params %}
+                <tr data-param-id="{{ param.param_id }}">
+                  <td><input type="text" class="form-control" name="paramName" value="{{ param.param_name }}"></td>
+                  <td><input type="text" class="form-control" name="dataType" value="{{ param.data_type }}"></td>
+                  <td>
+                    <select class="form-control" name="isRequired">
+                      <option value="true" {% if param.is_required %}selected{% endif %}>是</option>
+                      <option value="false" {% if not param.is_required %}selected{% endif %}>否</option>
+                    </select>
+                  </td>
+                  <td><input type="text" class="form-control" name="exampleValue" value="{{ param.example_value }}"></td>
+                  <td><input type="text" class="form-control" name="constraint" value="{{ param.constraint or '' }}"></td>
+                  <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'header')">删除</button></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- 请求参数编辑 -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">请求参数</h6>
+            <button class="btn btn-sm btn-primary" onclick="addRequestParam()">添加请求参数</button>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm table-bordered" id="requestParamsTable">
+              <thead>
+                <tr>
+                  <th style="width: 8em;">参数名</th>
+                  <th style="width: 8em;">数据类型</th>
+                  <th style="width: 8em;">是否必填</th>
+                  <th style="width: 20em;">示例值</th>
+                  <th style="width: 8em;">约束</th>
+                  <th style="width: 6em;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for param in interface.request_params %}
+                <tr data-param-id="{{ param.param_id }}">
+                  <td><input type="text" class="form-control" name="paramName" value="{{ param.param_name }}"></td>
+                  <td><input type="text" class="form-control" name="dataType" value="{{ param.data_type }}"></td>
+                  <td>
+                    <select class="form-control" name="isRequired">
+                      <option value="true" {% if param.is_required %}selected{% endif %}>是</option>
+                      <option value="false" {% if not param.is_required %}selected{% endif %}>否</option>
+                    </select>
+                  </td>
+                  <td><input type="text" class="form-control" name="exampleValue" value="{{ param.example_value }}"></td>
+                  <td><input type="text" class="form-control" name="constraint" value="{{ param.constraint or '' }}"></td>
+                  <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'request')">删除</button></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- 响应结果参数编辑 -->
+        <div class="card shadow-sm mb-4">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">响应结果参数</h6>
+            <button class="btn btn-sm btn-primary" onclick="addResponseParam()">添加响应参数</button>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm table-bordered" id="responseParamsTable">
+              <thead>
+                <tr>
+                  <th style="width: 8em;">参数名</th>
+                  <th style="width: 8em;">数据类型</th>
+                  <th style="width: 8em;">是否必填</th>
+                  <th style="width: 28em;">示例值</th>
+                  <th style="width: 6em;">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for param in interface.response_params %}
+                <tr data-param-id="{{ param.param_id }}">
+                  <td><input type="text" class="form-control" name="paramName" value="{{ param.param_name }}"></td>
+                  <td><input type="text" class="form-control" name="dataType" value="{{ param.data_type }}"></td>
+                  <td>
+                    <select class="form-control" name="isRequired">
+                      <option value="true" {% if param.is_required %}selected{% endif %}>是</option>
+                      <option value="false" {% if not param.is_required %}selected{% endif %}>否</option>
+                    </select>
+                  </td>
+                  <td><input type="text" class="form-control" name="exampleValue" value="{{ param.example_value }}"></td>
+                  <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'response')">删除</button></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <!-- 保存按钮 -->
+        <button class="btn btn-primary" onclick="saveInterface()">保存接口</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+// 页面加载时无需加载项目树，删除相关逻辑
+$(document).ready(function () {
+  // 移除 loadProjectTree() 调用
+});
+// 添加请求头参数行
+function addHeaderParam() {
+  const tableBody = $('#headerParamsTable tbody');
+  tableBody.append(`
+    <tr data-param-id="new">
+      <td><input type="text" class="form-control" name="paramName"></td>
+      <td><input type="text" class="form-control" name="dataType"></td>
+      <td>
+        <select class="form-control" name="isRequired">
+          <option value="true">是</option>
+          <option value="false">否</option>
+        </select>
+      </td>
+      <td><input type="text" class="form-control" name="exampleValue"></td>
+      <td><input type="text" class="form-control" name="constraint"></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'header')">删除</button></td>
+    </tr>
+  `);
+}
+// 添加请求参数行
+function addRequestParam() {
+  const tableBody = $('#requestParamsTable tbody');
+  tableBody.append(`
+    <tr data-param-id="new">
+      <td><input type="text" class="form-control" name="paramName"></td>
+      <td><input type="text" class="form-control" name="dataType"></td>
+      <td>
+        <select class="form-control" name="isRequired">
+          <option value="true">是</option>
+          <option value="false">否</option>
+        </select>
+      </td>
+      <td><input type="text" class="form-control" name="exampleValue"></td>
+      <td><input type="text" class="form-control" name="constraint"></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'request')">删除</button></td>
+    </tr>
+  `);
+}
+// 添加响应参数行
+function addResponseParam() {
+  const tableBody = $('#responseParamsTable tbody');
+  tableBody.append(`
+    <tr data-param-id="new">
+      <td><input type="text" class="form-control" name="paramName"></td>
+      <td><input type="text" class="form-control" name="dataType"></td>
+      <td>
+        <select class="form-control" name="isRequired">
+          <option value="true">是</option>
+          <option value="false">否</option>
+        </select>
+      </td>
+      <td><input type="text" class="form-control" name="exampleValue"></td>
+      <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'response')">删除</button></td>
+    </tr>
+  `);
+}
+// 删除参数行
+function deleteParam(btn, paramType) {
+  const row = $(btn).closest('tr');
+  row.remove();
+}
+// 保存接口
+function saveInterface() {
+  const interfaceData = {
+    interface_id: {{ interface.interface_id }},
+    name: $('#interfaceName').val(),
+    url: $('#interfaceUrl').val(),
+    method: $('#interfaceMethod').val(),
+    header_params: [],
+    request_params: [],
+    response_params: []
+  };
+  // 收集请求头参数
+  $('#headerParamsTable tbody tr').each(function () {
+    const paramId = $(this).data('param-id');
+    const paramName = $(this).find('input[name="paramName"]').val();
+    const dataType = $(this).find('input[name="dataType"]').val();
+    const isRequired = $(this).find('select[name="isRequired"]').val() === 'true';
+    const exampleValue = $(this).find('input[name="exampleValue"]').val();
+    const constraint = $(this).find('input[name="constraint"]').val();
+    interfaceData.header_params.push({
+      param_id: paramId,
+      param_name: paramName,
+      data_type: dataType,
+      is_required: isRequired,
+      example_value: exampleValue,
+      constraint: constraint
+    });
+  });
+  // 收集请求参数
+  $('#requestParamsTable tbody tr').each(function () {
+    const paramId = $(this).data('param-id');
+    const paramName = $(this).find('input[name="paramName"]').val();
+    const dataType = $(this).find('input[name="dataType"]').val();
+    const isRequired = $(this).find('select[name="isRequired"]').val() === 'true';
+    const exampleValue = $(this).find('input[name="exampleValue"]').val();
+    const constraint = $(this).find('input[name="constraint"]').val();
+    interfaceData.request_params.push({
+      param_id: paramId,
+      param_name: paramName,
+      data_type: dataType,
+      is_required: isRequired,
+      example_value: exampleValue,
+      constraint: constraint
+    });
+  });
+  // 收集响应参数
+  $('#responseParamsTable tbody tr').each(function () {
+    const paramId = $(this).data('param-id');
+    const paramName = $(this).find('input[name="paramName"]').val();
+    const dataType = $(this).find('input[name="dataType"]').val();
+    const isRequired = $(this).find('select[name="isRequired"]').val() === 'true';
+    const exampleValue = $(this).find('input[name="exampleValue"]').val();
+    interfaceData.response_params.push({
+      param_id: paramId,
+      param_name: paramName,
+      data_type: dataType,
+      is_required: isRequired,
+      example_value: exampleValue
+    });
+  });
+  // 保存请求
+  $.ajax({
+    url: '/api/interface/save',
+    type: 'POST',
+    contentType: 'application/json',
+    data: JSON.stringify(interfaceData),
+    success: function (res) {
+      if (res.code === 200) {
+        alert('接口保存成功');
+        // 跳转回接口管理页面
+        window.location.href = '/interface-management';
+      } else {
+        alert('接口保存失败：' + res.msg);
+      }
+    },
+    error: function (err) {
+      console.error('保存接口时发生错误：', err);
+      alert('保存接口失败，请稍后重试');
+    }
+  });
+}
+</script>
+{% endblock %}

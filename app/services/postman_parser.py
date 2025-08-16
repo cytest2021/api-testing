@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from app.models import db, Project, Interface, InterfaceParam, HttpMethod, ParamType, TestCase
 from flask_login import current_user
 import logging
@@ -8,6 +8,12 @@ import logging
 # 配置日志用于调试
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Path 参数映射规则：键为原始路径段，值为参数名
+PATH_PARAM_MAPPING = {
+    "1": "user_id"
+    # 可根据需要添加更多映射，如 "2": "other_param"
+}
 
 
 class PostmanParser:
@@ -143,7 +149,8 @@ class PostmanParser:
                 expected_result = f"状态: {status}, 状态码: {code}"
                 assert_rule = f"response.status == '{status}' and response.code == {code}"
             if body:
-                expected_result += f", 响应体包含关键数据"
+                # 直接拼接中文，不进行转义
+                expected_result += f", 响应体包含关键数据: {body}"
 
         # 安全获取用户ID
         creator_id = current_user.user_id if (current_user and hasattr(current_user, 'user_id')) else 1
@@ -151,7 +158,7 @@ class PostmanParser:
         test_case = TestCase(
             interface_id=interface.interface_id,
             case_name=case_name,
-            param_values=json.dumps(param_values) if param_values else None,
+            param_values=json.dumps(param_values, ensure_ascii=False) if param_values else None,
             expected_result=expected_result,
             assert_rule=assert_rule,
             creator_id=creator_id
@@ -220,14 +227,14 @@ class PostmanParser:
                 json_body = json.loads(body) if isinstance(body, str) else body
                 response_params.append({
                     "key": "body",
-                    "value": json_body,  # 存储完整JSON对象
+                    "value": json_body,  # 存储完整JSON对象（含中文）
                     "required": True
                 })
             except json.JSONDecodeError:
                 # 非JSON格式直接存储原始字符串
                 response_params.append({
                     "key": "body",
-                    "value": body,
+                    "value": body,  # 非JSON格式直接存储字符串（含中文）
                     "required": True
                 })
                 logger.warning(f"响应体不是有效的JSON，已存储原始字符串: {body}")
@@ -240,7 +247,7 @@ class PostmanParser:
                 param_type=ParamType.RESPONSE,
                 data_type=self._infer_data_type(param["value"]),
                 is_required=param.get("required", False),
-                example_value=json.dumps(param["value"]) if isinstance(param["value"], (dict, list)) else str(
+                example_value=json.dumps(param["value"], ensure_ascii=False) if isinstance(param["value"], (dict, list)) else str(
                     param["value"])
             )
             db.session.add(interface_param)
@@ -271,14 +278,24 @@ class PostmanParser:
         if not request:
             return
 
-        url = request.get("url", {})
+        # 从originalRequest中提取更完整的请求信息（含Query参数）
+        original_request = request.get("originalRequest", request)
+        url = original_request.get("url", {})
         raw_url = url.get("raw", "") if isinstance(url, dict) else str(url)
 
-        # 提取URL中的path部分
+        # 提取并处理Path参数，生成参数化的path_url
         parsed_url = urlparse(raw_url)
-        path_url = parsed_url.path  # 只保留路径部分
+        original_path = parsed_url.path
+        path_segments = original_path.split("/")
+        processed_segments = []
+        for segment in path_segments:
+            if segment in PATH_PARAM_MAPPING:
+                processed_segments.append(f"{{{PATH_PARAM_MAPPING[segment]}}}")
+            else:
+                processed_segments.append(segment)
+        path_url = "/".join(processed_segments)  # 参数化后的路径，如/api/users/{user_id}/orders
 
-        method = request.get("method", "GET")
+        method = original_request.get("method", "GET")
         try:
             http_method = HttpMethod(method)
         except ValueError:
@@ -297,11 +314,11 @@ class PostmanParser:
             interface = Interface(
                 project_id=self.project.project_id,
                 interface_name=current_path,
-                url=path_url,  # 存储提取的path部分
+                url=path_url,  # 存储参数化后的路径
                 method=http_method,
-                # 处理请求头，只保留key和value
+                # 处理请求头，只保留key和value，且保留中文
                 request_header=json.dumps([{"key": h.get("key"), "value": h.get("value")}
-                                           for h in request.get("header", []) if isinstance(h, dict)])
+                                           for h in original_request.get("header", []) if isinstance(h, dict)], ensure_ascii=False)
             )
             db.session.add(interface)
             try:
@@ -311,14 +328,24 @@ class PostmanParser:
                 db.session.rollback()
                 raise RuntimeError(f"接口创建数据库操作失败: {str(e)}")
 
+        # 解析Query参数（从URL查询字符串中提取）
+        query_string = parsed_url.query
+        query_params = []
+        if query_string:
+            # 使用parse_qs解析查询字符串，如 min_price=1000&max_price=3000 → {min_price: ['1000'], max_price: ['3000']}
+            parsed_query = parse_qs(query_string)
+            for key, values in parsed_query.items():
+                # 取第一个值作为示例值（若有多个值，可根据需求调整）
+                query_params.append({"key": key, "value": values[0], "required": True})
+
         # 解析请求参数
         params = {
             ParamType.PATH: self._parse_url_params(url),
-            ParamType.QUERY: request.get("query", []),
+            ParamType.QUERY: query_params,  # 从URL查询字符串提取的Query参数
             # 处理请求头参数，只保留key和value
             ParamType.HEADER: [{"key": h.get("key"), "value": h.get("value"), "required": h.get("required", False)}
-                               for h in request.get("header", []) if isinstance(h, dict)],
-            ParamType.BODY: self._parse_request_body(request.get("body", {}))
+                               for h in original_request.get("header", []) if isinstance(h, dict)],
+            ParamType.BODY: self._parse_request_body(original_request.get("body", {}))
         }
 
         for param_type, param_list in params.items():
@@ -340,13 +367,23 @@ class PostmanParser:
         path_params = []
         if isinstance(url, dict) and "path" in url:
             for segment in url["path"]:
-                if isinstance(segment, str) and segment.startswith(":"):
-                    param_name = segment[1:]
-                    path_params.append({
-                        "key": param_name,
-                        "value": f"{{{param_name}}}",
-                        "required": True
-                    })
+                if isinstance(segment, str):
+                    # 规则1：识别以:开头的路径段（Postman常见Path参数标记）
+                    if segment.startswith(":"):
+                        param_name = segment[1:]
+                        path_params.append({
+                            "key": param_name,
+                            "value": f"{{{param_name}}}",
+                            "required": True
+                        })
+                    # 规则2：通过PATH_PARAM_MAPPING映射数字等路径段为参数
+                    elif segment in PATH_PARAM_MAPPING:
+                        param_name = PATH_PARAM_MAPPING[segment]
+                        path_params.append({
+                            "key": param_name,
+                            "value": f"{{{param_name}}}",
+                            "required": True
+                        })
         return path_params
 
     def parse(self):
