@@ -360,8 +360,8 @@ class PostmanParser:
             else:
                 response_data = self._parse_response(response, interface)
 
-        # 创建测试用例
-        self._create_test_case(interface, response_data)
+        # # 创建测试用例
+        # self._create_test_case(interface, response_data)
 
     def _parse_url_params(self, url):
         path_params = []

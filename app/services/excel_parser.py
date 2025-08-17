@@ -247,50 +247,50 @@ def parse_nested_params(interface_id, data, param_type, parent_key=''):
             count += parse_nested_params(interface_id, value, param_type, full_key)
     return count
 
-
-def create_test_case(interface, request_body_str, response_result_str, creator_id):
-    """
-    创建测试用例，关联接口参数
-    :param interface: Interface 实例
-    :param request_body_str: 请求体内容
-    :param response_result_str: 响应结果内容
-    :param creator_id: 用例创建者 ID
-    :return: TestCase 实例或 None
-    """
-    try:
-        request_body = json.loads(request_body_str) if request_body_str else {}
-        response_result = json.loads(response_result_str) if response_result_str else {}
-
-        param_mapping = {}
-        for param in interface.params:
-            keys = param.param_name.split('.')
-            current = request_body
-            try:
-                for k in keys:
-                    current = current[k]
-                param_mapping[param.param_name] = current
-            except (KeyError, TypeError):
-                continue
-
-        test_case = TestCase(
-            interface_id=interface.interface_id,
-            case_name=f"用例_{interface.interface_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            param_values=json.dumps(param_mapping),
-            expected_result=json.dumps(response_result),
-            assert_rule=generate_assert_rule(response_result),
-            creator_id=creator_id,
-            create_time=datetime.now()
-        )
-        return test_case
-    except json.JSONDecodeError as e:
-        logger.error(f"创建测试用例失败: {e}")
-        return None
-
-
-def generate_assert_rule(response_result):
-    """自动生成简单断言规则"""
-    if 'status' in response_result:
-        return f"response['status'] == '{response_result['status']}'"
-    if 'code' in response_result:
-        return f"response['code'] == {response_result['code']}"
-    return "response.get('status') == 'success'"
+#
+# def create_test_case(interface, request_body_str, response_result_str, creator_id):
+#     """
+#     创建测试用例，关联接口参数
+#     :param interface: Interface 实例
+#     :param request_body_str: 请求体内容
+#     :param response_result_str: 响应结果内容
+#     :param creator_id: 用例创建者 ID
+#     :return: TestCase 实例或 None
+#     """
+#     try:
+#         request_body = json.loads(request_body_str) if request_body_str else {}
+#         response_result = json.loads(response_result_str) if response_result_str else {}
+#
+#         param_mapping = {}
+#         for param in interface.params:
+#             keys = param.param_name.split('.')
+#             current = request_body
+#             try:
+#                 for k in keys:
+#                     current = current[k]
+#                 param_mapping[param.param_name] = current
+#             except (KeyError, TypeError):
+#                 continue
+#
+#         test_case = TestCase(
+#             interface_id=interface.interface_id,
+#             case_name=f"用例_{interface.interface_name}_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+#             param_values=json.dumps(param_mapping),
+#             expected_result=json.dumps(response_result),
+#             assert_rule=generate_assert_rule(response_result),
+#             creator_id=creator_id,
+#             create_time=datetime.now()
+#         )
+#         return test_case
+#     except json.JSONDecodeError as e:
+#         logger.error(f"创建测试用例失败: {e}")
+#         return None
+#
+#
+# def generate_assert_rule(response_result):
+#     """自动生成简单断言规则"""
+#     if 'status' in response_result:
+#         return f"response['status'] == '{response_result['status']}'"
+#     if 'code' in response_result:
+#         return f"response['code'] == {response_result['code']}"
+#     return "response.get('status') == 'success'"
