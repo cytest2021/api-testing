@@ -21,13 +21,9 @@ def home():
 def show_upload_page():
     return render_template('upload.html')
 
-@main_bp.route('/test-case-generate')
+@main_bp.route('/test-case-management')
 def test_case_generate():
-    return render_template('test_case_generate.html')
-
-@main_bp.route('/case/edit/<int:project_id>')
-def edit_case(project_id):
-    return render_template('edit_case.html', project_id=project_id)
+    return render_template('test_case_management.html')
 
 # --------------------- 接口管理页面路由 ---------------------
 @main_bp.route('/interface-management')
@@ -703,7 +699,7 @@ def get_interface_cases(interface_id):
 # --------------------- 路由与页面关联调整（新增） ---------------------
 @main_bp.route('/project-management')
 def project_management():
-    return render_template('project_management.html')
+    return render_template('test_case_management.html')
 
 # --------------------- 编辑接口信息后保存 ---------------------
 @main_bp.route('/case/list/<int:interface_id>')
