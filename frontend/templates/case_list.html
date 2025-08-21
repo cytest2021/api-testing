@@ -19,7 +19,9 @@
                 <tr>
                     <th>用例ID</th>
                     <th>用例名称</th>
-                    <th>参数配置</th>
+                    <th>请求头参数</th>
+                    <th>请求参数</th>
+                    <th>预期结果</th>
                     <th>断言规则</th>
                     <th>操作</th>
                 </tr>
@@ -39,16 +41,18 @@
                 if (res.code === 200) {
                     const tbody = $("#caseTableBody");
                     tbody.empty();
-                    res.data.forEach(case => {
+                    res.data.forEach(caseItem => {
                         tbody.append(`
                             <tr>
-                                <td>${case.case_id}</td>
-                                <td>${case.case_name}</td>
-                                <td>${case.param_values}</td>
-                                <td>${case.assert_rule}</td>
+                                <td>${caseItem.case_id}</td>
+                                <td>${caseItem.case_name}</td>
+                                <td>${caseItem.request_header}</td>
+                                <td>${caseItem.request_param}</td>
+                                <td>${caseItem.expected_result}</td>
+                                <td>${caseItem.assert_rule}</td>
                                 <td>
-                                    <a href="/case/edit/${case.case_id}" class="btn btn-sm btn-warning">编辑</a>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteCase(${case.case_id})">删除</button>
+                                    <a href="/case/edit/${caseItem.case_id}" class="btn btn-sm btn-warning">编辑</a>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteCase(${caseItem.case_id})">删除</button>
                                 </td>
                             </tr>
                         `);

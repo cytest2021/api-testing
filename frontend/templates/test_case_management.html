@@ -42,7 +42,6 @@
               </tbody>
             </table>
           </div>
-
           <!-- 无测试用例提示（默认隐藏） -->
           <div class="alert alert-warning" id="noCasePrompt" style="display: none;">
             <i class="bi bi-exclamation-triangle"></i> 该项目暂无测试用例，请点击"测试用例生成"按钮生成
@@ -53,7 +52,7 @@
   </div>
 </div>
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   console.log('test_case_management 页面 - 项目与用例逻辑执行');
 
   // DOM元素
@@ -69,9 +68,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // 状态变量
   let selectedProject = null; // 记录当前选中的项目 {id, name}
   let projectTestCases = {}; // 缓存已生成的用例 {projectId: cases[]}
+  let projectList = []; // 存储项目列表数据
 
   // 验证DOM元素
-  if (!projectTree || !caseContainer) {
+  if (!projectTree ||!caseContainer) {
     console.error('关键 DOM 元素缺失');
     return;
   }
@@ -79,7 +79,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // 格式化参数显示（转换为"参数:参数值"格式）
   const formatParams = (paramsStr) => {
     if (!paramsStr || paramsStr === '无') return paramsStr;
-
     // 处理可能的多种分隔符情况
     const paramPairs = paramsStr.split(/[,;]/).map(pair => {
       // 分割参数名和参数值（处理可能的空格）
@@ -89,7 +88,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       return pair.trim();
     });
-
     return paramPairs.join('; ');
   };
 
@@ -98,20 +96,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const xhr = new XMLHttpRequest();
     xhr.open('GET', '/api/all-projects', true);
     xhr.timeout = 10000;
-
     xhr.onloadstart = () => {
       projectTree.innerHTML = '<li class="text-muted">正在加载项目...</li>';
     };
-
-    xhr.onload = () => {
+    xhr.onload = function () {
       if (xhr.status === 200) {
         try {
           const res = JSON.parse(xhr.responseText);
           projectTree.innerHTML = '';
           if (res && res.code === 200 && Array.isArray(res.data)) {
+            projectList = res.data; // 存储项目列表
             res.data.forEach(project => {
               const li = document.createElement('li');
-              li.className = 'mb-3 project-item';
+              li.className ='mb-3 project-item';
               li.dataset.projectId = project.id;
               li.innerHTML = `
                 <div class="d-flex justify-content-between align-items-center p-2 rounded border shadow-sm">
@@ -123,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
               `;
               // 点击项目名称选中项目
-              li.querySelector('.project-name').addEventListener('click', () => {
+              li.querySelector('.project-name').addEventListener('click', function () {
                 selectProject(project.id, project.name);
               });
               projectTree.appendChild(li);
@@ -139,20 +136,17 @@ document.addEventListener('DOMContentLoaded', function() {
         projectTree.innerHTML = `<li class="text-danger list-group-item">项目请求失败，状态码: ${xhr.status}</li>`;
       }
     };
-
     xhr.onerror = () => {
       projectTree.innerHTML = '<li class="text-danger list-group-item">项目请求网络错误</li>';
     };
-
     xhr.ontimeout = () => {
       projectTree.innerHTML = '<li class="text-danger list-group-item">项目请求超时</li>';
     };
-
     xhr.send();
   };
 
   // 选中项目
-  window.selectProject = function(projectId, projectName) {
+  window.selectProject = function (projectId, projectName) {
     // 更新选中状态
     document.querySelectorAll('.project-item').forEach(item => {
       item.classList.remove('active');
@@ -177,7 +171,6 @@ document.addEventListener('DOMContentLoaded', function() {
       // 显示加载状态
       caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="bi bi-hourglass"></i> 加载用例中...</td></tr>';
       noCasePrompt.style.display = 'none';
-
       // 尝试从服务器加载已存在的用例
       loadExistingCases(projectId);
     }
@@ -185,52 +178,75 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // 加载已存在的用例
   const loadExistingCases = (projectId) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('GET', `/api/project/${projectId}/cases`, true);
-    xhr.timeout = 10000;
+    // 从项目列表中获取项目信息
+    const project = projectList.find(p => p.id === projectId);
+    if (!project) {
+      console.error('项目不存在');
+      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">项目不存在</td></tr>';
+      return;
+    }
 
-    xhr.onload = () => {
-      if (xhr.status === 200) {
-        try {
-          const res = JSON.parse(xhr.responseText);
-          if (res && Array.isArray(res)) {
-            projectTestCases[projectId] = res;
-            renderTestCases(res);
+    // 如果项目没有接口信息，直接显示无数据
+    if (!project.interfaces ||!Array.isArray(project.interfaces)) {
+      projectTestCases[projectId] = [];
+      renderTestCases([]);
+      return;
+    }
+
+    // 为每个接口创建获取用例的Promise
+    const casePromises = project.interfaces.map(interface => {
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `/api/interface/${interface.interface_id}/cases`, true);
+        xhr.timeout = 10000;
+
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            try {
+              const res = JSON.parse(xhr.responseText);
+              resolve(Array.isArray(res)? res : []);
+            } catch (e) {
+              console.error('用例数据解析失败:', e);
+              resolve([]);
+            }
+          } else if (xhr.status === 404) {
+            resolve([]);
           } else {
-            // 接口返回格式错误，视为无可用用例
-            projectTestCases[projectId] = [];
-            renderTestCases([]);
+            console.error('加载用例失败，状态码:', xhr.status);
+            resolve([]);
           }
-        } catch (e) {
-          console.error('用例数据解析失败:', e);
-          projectTestCases[projectId] = [];
-          renderTestCases([]);
-        }
-      } else if (xhr.status === 404) {
-        // 无可用用例
-        projectTestCases[projectId] = [];
-        renderTestCases([]);
-      } else {
-        caseTbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">加载用例失败，状态码: ${xhr.status}</td></tr>`;
+        };
+
+        xhr.onerror = function () {
+          console.error('加载用例网络错误');
+          resolve([]);
+        };
+
+        xhr.ontimeout = function () {
+          console.error('加载用例超时');
+          resolve([]);
+        };
+
+        xhr.send();
+      });
+    });
+
+    // 等待所有接口用例加载完成
+    Promise.all(casePromises)
+     .then(results => {
+        const allCases = [].concat(...results);
+        projectTestCases[projectId] = allCases;
+        renderTestCases(allCases);
+      })
+     .catch(error => {
+        console.error('加载用例失败:', error);
+        caseTbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">加载用例失败: ${error.message}</td></tr>`;
         noCasePrompt.style.display = 'none';
-      }
-    };
-
-    xhr.onerror = () => {
-      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">加载用例网络错误</td></tr>';
-      noCasePrompt.style.display = 'none';
-    };
-
-    xhr.ontimeout = () => {
-      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">加载用例超时</td></tr>';
-      noCasePrompt.style.display = 'none';
-    };
-
-    xhr.send();
+      });
   };
 
   // 生成测试用例
-  window.handleGenerateCases = function(projectId, projectName, btn) {
+  window.handleGenerateCases = function (projectId, projectName, btn) {
     // 先选中项目
     selectProject(projectId, projectName);
 
@@ -238,11 +254,19 @@ document.addEventListener('DOMContentLoaded', function() {
     caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="bi bi-hourglass"></i> 生成测试用例中...</td></tr>';
     noCasePrompt.style.display = 'none';
 
+    // 禁用生成按钮防止重复提交
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 生成中...';
+
     const xhr = new XMLHttpRequest();
     xhr.open('GET', `/api/project/${projectId}/generate_cases`, true);
     xhr.timeout = 15000;
 
-    xhr.onload = () => {
+    xhr.onload = function () {
+      // 恢复按钮状态
+      btn.disabled = false;
+      btn.innerHTML = '测试用例生成';
+
       if (xhr.status === 200) {
         try {
           const res = JSON.parse(xhr.responseText);
@@ -263,89 +287,105 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     xhr.onerror = () => {
+      // 恢复按钮状态
+      btn.disabled = false;
+      btn.innerHTML = '测试用例生成';
       caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">生成用例网络错误</td></tr>';
     };
 
     xhr.ontimeout = () => {
+      // 恢复按钮状态
+      btn.disabled = false;
+      btn.innerHTML = '测试用例生成';
       caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">生成用例超时</td></tr>';
     };
 
     xhr.send();
   };
 
-  // 测试用例操作函数
-  window.testCase = function(caseId) {
+  // 执行测试用例
+  window.runCase = function (caseId) {
     console.log(`执行测试用例: ${caseId}`);
-    // 测试用例的逻辑实现
-    alert(`正在测试用例 ${caseId}`);
+    // 显示执行状态
+    const row = document.querySelector(`tr:has(td:first-child:contains('${caseId}'))`);
+    if (row) {
+      const originalHtml = row.cells[6].innerHTML;
+      row.cells[6].innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 执行中...';
+
+      // 模拟执行请求
+      setTimeout(() => {
+        alert(`测试用例 ${caseId} 执行完成`);
+        row.cells[6].innerHTML = originalHtml;
+      }, 1000);
+    }
   };
 
-  window.editCase = function(caseId) {
+  // 编辑测试用例
+  window.editCase = function (caseId) {
     console.log(`编辑测试用例: ${caseId}`);
     // 编辑用例的逻辑实现
     alert(`正在编辑用例 ${caseId}`);
   };
 
-  window.deleteCase = function(caseId) {
+  // 删除测试用例
+  window.deleteCase = function (caseId) {
     console.log(`删除测试用例: ${caseId}`);
     // 删除用例的逻辑实现
     if (confirm(`确定要删除用例 ${caseId} 吗？`)) {
-      // 执行删除操作
-      alert(`用例 ${caseId} 已删除`);
-      // 如果需要重新加载列表，可以在这里调用相应的函数
+      // 发送删除请求
+      const xhr = new XMLHttpRequest();
+      xhr.open('DELETE', `/api/case/${caseId}`, true);
+
+      xhr.onload = function () {
+        if (xhr.status === 200) {
+          alert(`用例 ${caseId} 已删除`);
+          // 重新加载列表
+          if (selectedProject) {
+            loadExistingCases(selectedProject.id);
+          }
+        } else {
+          alert(`删除失败，状态码: ${xhr.status}`);
+        }
+      };
+
+      xhr.onerror = function () {
+        alert('删除请求网络错误');
+      };
+
+      xhr.send();
     }
   };
 
   // 渲染测试用例列表
-  const renderTestCases = (cases) => {
-    if (cases.length > 0) {
-      caseTbody.innerHTML = '';
-      noCasePrompt.style.display = 'none';
+  function renderTestCases(cases) {
+    const tbody = document.getElementById('caseTbody');
+    tbody.innerHTML = '';
 
-      cases.forEach((caseItem, index) => {
-        // 格式化参数显示
-        const formattedHeaders = formatParams(caseItem.headers);
-        const formattedParams = formatParams(caseItem.params);
-
-        const row = document.createElement('tr');
-        // 为需要截断的列（ID、用例名称、请求头参数、请求参数、预期结果、判定规则）添加title属性，实现悬浮显示完整内容
-        const idCell = `<td title="${caseItem.case_id || index + 1}">${caseItem.case_id || index + 1}</td>`;
-        const nameCell = `<td title="${caseItem.case_name || '无'}">${caseItem.case_name || '无'}</td>`;
-        const headersCell = `<td title="${formattedHeaders || '无'}">${formattedHeaders || '无'}</td>`;
-        const paramsCell = `<td title="${formattedParams || '无'}">${formattedParams || '无'}</td>`;
-        const expectedResultCell = `<td title="${caseItem.expected_result || '无'}">${caseItem.expected_result || '无'}</td>`;
-        const ruleCell = `<td title="${caseItem.judgment_rule || '无'}">${caseItem.judgment_rule || '无'}</td>`;
-        // 操作列，不设置截断，展示测试、编辑、删除按钮
-        const operateCell = `
-          <td>
-            <button class="btn btn-sm btn-success me-1" onclick="testCase(${caseItem.case_id || index + 1})">
-              测试
-            </button>
-            <button class="btn btn-sm btn-warning me-1" onclick="editCase(${caseItem.case_id || index + 1})">
-              编辑
-            </button>
-            <button class="btn btn-sm btn-danger" onclick="deleteCase(${caseItem.case_id || index + 1})">
-              删除
-            </button>
-          </td>
-        `;
-
-        row.innerHTML = `
-          ${idCell}
-          ${nameCell}
-          ${headersCell}
-          ${paramsCell}
-          ${expectedResultCell}
-          ${ruleCell}
-          ${operateCell}
-        `;
-        caseTbody.appendChild(row);
-      });
-    } else {
-      caseTbody.innerHTML = '';
-      noCasePrompt.style.display = 'block';
+    if (cases.length === 0) {
+      document.getElementById('noCasePrompt').style.display = 'block';
+      return;
     }
-  };
+
+    document.getElementById('noCasePrompt').style.display = 'none';
+
+    cases.forEach(caseItem => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td>${caseItem.case_id}</td>
+        <td>${caseItem.case_name || '-'}</td>
+        <td>${formatParams(caseItem.request_header) || '-'}</td>
+        <td>${formatParams(caseItem.request_param) || '-'}</td>
+        <td>${caseItem.expected_result || '-'}</td>
+        <td>${caseItem.assert_rule || '-'}</td>
+        <td>
+          <button class="btn btn-sm btn-warning" onclick="editCase(${caseItem.case_id})">编辑</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteCase(${caseItem.case_id})">删除</button>
+          <button class="btn btn-sm btn-primary" onclick="runCase(${caseItem.case_id})">执行</button>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+  }
 
   // 初始化加载项目
   loadProjects();
@@ -397,35 +437,36 @@ document.addEventListener('DOMContentLoaded', function() {
     width: 100%; /* 设置表格宽度为100%，使其适应容器 */
   }
 
-/* 表格单元格样式：除操作列外，其他列都设置截断和省略号 */
-#caseTable th:not(:nth-child(7)),
-#caseTable td:not(:nth-child(7)) {
-  white-space: nowrap; /* 强制不换行 */
-  overflow: hidden;    /* 溢出隐藏 */
-  text-overflow: ellipsis; /* 溢出显示省略号 */
-  vertical-align: middle;
-}
-/* 各列宽度设置 */
-#caseTable th:nth-child(1), #caseTable td:nth-child(1) {
-  width: 4em;
-}
-#caseTable th:nth-child(2), #caseTable td:nth-child(2) {
-  width: 6em;
-}
-#caseTable th:nth-child(3), #caseTable td:nth-child(3) {
-  width: 6em;
-}
-#caseTable th:nth-child(4), #caseTable td:nth-child(4) {
-  width: 6em;
-}
-#caseTable th:nth-child(5), #caseTable td:nth-child(5) {
-  width: 12em;
-}
-#caseTable th:nth-child(6), #caseTable td:nth-child(6) {
-  width: 6em;
-}
-#caseTable th:nth-child(7), #caseTable td:nth-child(7) {
-  min-width: 16em;
-}
+  /* 表格单元格样式：除操作列外，其他列都设置截断和省略号 */
+  #caseTable th:not(:nth-child(7)),
+  #caseTable td:not(:nth-child(7)) {
+    white-space: nowrap; /* 强制不换行 */
+    overflow: hidden;    /* 溢出隐藏 */
+    text-overflow: ellipsis; /* 溢出显示省略号 */
+    vertical-align: middle;
+  }
+
+  /* 各列宽度设置 */
+  #caseTable th:nth-child(1), #caseTable td:nth-child(1) {
+    width: 4em;
+  }
+  #caseTable th:nth-child(2), #caseTable td:nth-child(2) {
+    width: 6em;
+  }
+  #caseTable th:nth-child(3), #caseTable td:nth-child(3) {
+    width: 6em;
+  }
+  #caseTable th:nth-child(4), #caseTable td:nth-child(4) {
+    width: 6em;
+  }
+  #caseTable th:nth-child(5), #caseTable td:nth-child(5) {
+    width: 12em;
+  }
+  #caseTable th:nth-child(6), #caseTable td:nth-child(6) {
+    width: 6em;
+  }
+  #caseTable th:nth-child(7), #caseTable td:nth-child(7) {
+    min-width: 16em;
+  }
 </style>
 {% endblock %}

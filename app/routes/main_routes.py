@@ -678,25 +678,6 @@ def save_interface():
         db.session.rollback()
         return jsonify({"code": 500, "msg": f"保存接口失败：{str(e)}"}), 500
 
-# --------------------- 用例管理功能（新增，按需获取用例） ---------------------
-@main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
-def get_interface_cases(interface_id):
-    # 显式加载指定接口的用例
-    cases = TestCase.query.filter_by(interface_id=interface_id).all()
-    return jsonify({
-        "code": 200,
-        "data": [
-            {
-                "case_id": c.case_id,
-                "case_name": c.case_name,
-                "param_values": c.param_values,
-                "expected_result": c.expected_result,
-                "assert_rule": c.assert_rule,
-                "create_time": c.create_time.strftime("%Y-%m-%d %H:%M:%S")
-            } for c in cases
-        ]
-    })
-
 # --------------------- 路由与页面关联调整（新增） ---------------------
 @main_bp.route('/project-management')
 def project_management():
@@ -712,49 +693,115 @@ def case_list(interface_id):
 # 生成项目下的测试用例
 @main_bp.route('/api/project/<int:project_id>/generate_cases', methods=['GET'])
 def generate_cases(project_id):
+    """为项目下所有接口生成测试用例"""
+    # 验证项目是否存在
     project = Project.query.get(project_id)
     if not project:
-        return jsonify({"error": "项目不存在"}), 404
+        return jsonify({"code": 404, "message": "项目不存在"}), 404
 
-    all_test_cases = []
-    for interface in project.interfaces:
-        cases = generate_test_cases(interface)
-        all_test_cases.extend(cases)
+    # 获取项目下所有接口
+    interfaces = Interface.query.filter_by(project_id=project_id).all()
+    if not interfaces:
+        return jsonify({"code": 200, "message": "项目下无接口，无需生成用例"}), 200
 
-    return jsonify(all_test_cases), 200
+    total_cases = 0
+    for interface in interfaces:
+        # 调用已有的生成用例函数
+        result = generate_test_cases(interface.id, creator_id=project.creator_id)
+        # 解析生成结果中的用例数量
+        if "成功生成" in result:
+            case_count = int(result.split("成功生成")[1].split("条用例")[0])
+            total_cases += case_count
+
+    return jsonify({
+        "code": 200,
+        "message": f"项目测试用例生成完成，共生成{total_cases}条用例"
+    }), 200
 
 
-# 获取项目下的用例列表（支持搜索）
-@main_bp.route('/api/project/<int:project_id>/cases', methods=['GET'])
-def get_project_cases(project_id):
-    keyword = request.args.get('keyword', '')
-    # 联表查询用例和所属接口
-    query = db.session.query(TestCase, Interface.interface_name) \
-        .join(Interface, TestCase.interface_id == Interface.interface_id) \
-        .filter(Interface.project_id == project_id)
+@main_bp.route('/api/generate-cases', methods=['POST'])
+def generate_cases_api():
+    interface_id = request.args.get('interface_id')
+    if not interface_id:
+        return jsonify({"code": 400, "msg": "接口ID不能为空"})
 
-    # 搜索逻辑（模糊匹配用例名称、参数、断言）
-    if keyword:
-        query = query.filter(
-            db.or_(
-                TestCase.case_name.like(f'%{keyword}%'),
-                TestCase.param_values.like(f'%{keyword}%'),
-                TestCase.assert_rule.like(f'%{keyword}%')
-            )
-        )
+    try:
+        # 获取当前用户ID
+        creator_id = current_user.user_id if hasattr(current_user, 'user_id') else 1
+        result = generate_test_cases(int(interface_id), creator_id)
+        return jsonify({"code": 200, "msg": result})
+    except Exception as e:
+        return jsonify({"code": 500, "msg": f"生成用例失败：{str(e)}"})
 
-    cases = query.all()
-    result = []
-    for case, interface_name in cases:
-        result.append({
-            "case_id": case.case_id,
-            "case_name": case.case_name,
-            "interface_name": interface_name,
-            "param_values": case.param_values,
-            "assert_rule": case.assert_rule
-        })
 
-    return jsonify({"code": 200, "data": result})
+# 修改获取用例列表的接口，支持新的参数展示方式
+@main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
+def get_interface_cases(interface_id):
+    try:
+        cases = TestCase.query.filter_by(interface_id=interface_id).all()
+        case_list = []
+        for case in cases:
+            # 格式化请求头和请求参数为"key: value"形式
+            header_str = ""
+            if case.request_header:
+                try:
+                    headers = json.loads(case.request_header)
+                    header_str = ", ".join([f"{k}: {v}" for k, v in headers.items()])
+                except:
+                    header_str = case.request_header
+
+            param_str = ""
+            if case.request_param:
+                try:
+                    params = json.loads(case.request_param)
+                    param_str = ", ".join([f"{k}: {v}" for k, v in params.items()])
+                except:
+                    param_str = case.request_param
+
+            case_list.append({
+                "case_id": case.case_id,
+                "case_name": case.case_name,
+                "request_header": header_str,
+                "request_param": param_str,
+                "expected_result": case.expected_result,
+                "assert_rule": case.assert_rule
+            })
+        return jsonify({"code": 200, "data": case_list})
+    except Exception as e:
+        return jsonify({"code": 500, "msg": f"获取用例失败：{str(e)}"})
+
+
+# # 获取项目下的用例列表（支持搜索）
+# @main_bp.route('/api/project/<int:project_id>/cases', methods=['GET'])
+# def get_project_cases(project_id):
+#     keyword = request.args.get('keyword', '')
+#     # 联表查询用例和所属接口
+#     query = db.session.query(TestCase, Interface.interface_name) \
+#         .join(Interface, TestCase.interface_id == Interface.interface_id) \
+#         .filter(Interface.project_id == project_id)
+#
+#     # 搜索逻辑（模糊匹配用例名称、参数、断言）
+#     if keyword:
+#         query = query.filter(
+#             db.or_(
+#                 TestCase.case_name.like(f'%{keyword}%'),
+#                 TestCase.param_values.like(f'%{keyword}%'),
+#                 TestCase.assert_rule.like(f'%{keyword}%')
+#             )
+#         )
+#
+#     cases = query.all()
+#     result = []
+#     for case, interface_name in cases:
+#         result.append({
+#             "case_id": case.case_id,
+#             "case_name": case.case_name,
+#             "interface_name": interface_name,
+#             "param_values": case.param_values,
+#             "assert_rule": case.assert_rule
+#         })
+#
+#     return jsonify({"code": 200, "data": result})
 
 
 # 删除用例

@@ -180,6 +180,9 @@ class TestCase(db.Model):
     case_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     interface_id = db.Column(db.Integer, db.ForeignKey('interface.interface_id'), nullable=False)
     case_name = db.Column(db.String(100), nullable=False)
+    # 在TestCase模型中添加字段
+    request_header = db.Column(db.Text, nullable=True)  # 存储请求头参数
+    request_param = db.Column(db.Text, nullable=True)  # 存储请求参数（path/query/body）
     param_values = db.Column(db.Text, nullable=True)
     expected_result = db.Column(db.Text, nullable=True)
     assert_rule = db.Column(db.String(200), nullable=True)
