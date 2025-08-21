@@ -1,110 +1,431 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>项目管理</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-</head>
-<body>
-    <div class="container mt-5">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3>项目管理</h3>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addProjectModal">新增项目</button>
+{% extends "index.html" %}
+{% block content %}
+<div class="container-fluid p-0" style="height: 100vh;">
+  <div class="row g-0 h-100">
+    <!-- 左侧项目树 -->
+    <div class="col-lg-3 bg-light border-end h-100 overflow-auto">
+      <div class="p-3">
+        <h5 class="fw-bold mb-3">项目列表</h5>
+        <ul class="list-unstyled" id="projectTree">
+          <li class="text-muted">加载项目中...</li>
+        </ul>
+      </div>
+    </div>
+    <!-- 右侧用例列表 -->
+    <div class="col-lg-9 h-100 overflow-auto bg-white">
+      <div class="p-4" id="caseContainer">
+        <!-- 初始状态提示 -->
+        <div class="alert alert-info" id="initialPrompt">
+          <i class="bi bi-info-circle"></i> 从左侧项目列表选中项目展示项目下的测试用例
         </div>
-
-        <table class="table table-bordered">
-            <thead>
+        <!-- 用例列表（默认隐藏） -->
+        <div id="caseListSection" style="display: none;">
+          <h5 class="fw-bold mb-4">
+            <span id="selectedProjectName">测试用例</span>
+          </h5>
+          <!-- 表格容器添加滚动条以处理宽表格 -->
+          <div style="overflow-x: auto;">
+            <table class="table table-striped" id="caseTable">
+              <thead>
                 <tr>
-                    <th>项目ID</th>
-                    <th>项目名称</th>
-                    <th>描述</th>
-                    <th>创建时间</th>
-                    <th>操作</th>
+                  <th style="width: 4em;">ID</th>
+                  <th style="width: 8em;">用例名称</th>
+                  <th style="width: 8em;">请求头参数</th>
+                  <th style="width: 8em;">请求参数</th>
+                  <th style="width: 10em;">预期结果</th>
+                  <th style="width: 8em;">判定规则</th>
+                  <th style="min-width: 18em;">操作</th>
                 </tr>
-            </thead>
-            <tbody id="projectTableBody">
-                <!-- 动态加载项目列表 -->
-            </tbody>
-        </table>
-    </div>
+              </thead>
+              <tbody id="caseTbody">
+                <!-- 用例数据将动态填充 -->
+              </tbody>
+            </table>
+          </div>
 
-    <!-- 新增/编辑项目模态框 -->
-    <div class="modal fade" id="addProjectModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-body">
-                    <form id="projectForm">
-                        <input type="hidden" id="projectId">
-                        <div class="mb-3">
-                            <label class="form-label">项目名称</label>
-                            <input type="text" class="form-control" id="projectName" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">描述</label>
-                            <textarea class="form-control" id="projectDesc"></textarea>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" id="saveProject">保存</button>
-                </div>
-            </div>
+          <!-- 无测试用例提示（默认隐藏） -->
+          <div class="alert alert-warning" id="noCasePrompt" style="display: none;">
+            <i class="bi bi-exclamation-triangle"></i> 该项目暂无测试用例，请点击"测试用例生成"按钮生成
+          </div>
         </div>
+      </div>
     </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('test_case_management 页面 - 项目与用例逻辑执行');
 
-    <script>
-        // 加载项目列表
-        function loadProjects() {
-            $.get("/api/all-projects", function(res) {
-                if (res.code === 200) {
-                    const tbody = $("#projectTableBody");
-                    tbody.empty();
-                    res.data.forEach(project => {
-                        tbody.append(`
-                            <tr>
-                                <td>${project.id}</td>
-                                <td>${project.name}</td>
-                                <td>${project.description || '-'}</td>
-                                <td>${project.create_time || '-'}</td>
-                                <td>
-                                    <button class="btn btn-sm btn-warning" onclick="editProject(${project.id})">编辑</button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteProject(${project.id})">删除</button>
-                                    <a href="/interface-management?project_id=${project.id}" class="btn btn-sm btn-info">查看接口</a>
-                                </td>
-                            </tr>
-                        `);
-                    });
-                }
+  // DOM元素
+  const projectTree = document.getElementById('projectTree');
+  const caseContainer = document.getElementById('caseContainer');
+  const initialPrompt = document.getElementById('initialPrompt');
+  const caseListSection = document.getElementById('caseListSection');
+  const selectedProjectName = document.getElementById('selectedProjectName');
+  const caseTable = document.getElementById('caseTable');
+  const caseTbody = document.getElementById('caseTbody');
+  const noCasePrompt = document.getElementById('noCasePrompt');
+
+  // 状态变量
+  let selectedProject = null; // 记录当前选中的项目 {id, name}
+  let projectTestCases = {}; // 缓存已生成的用例 {projectId: cases[]}
+
+  // 验证DOM元素
+  if (!projectTree || !caseContainer) {
+    console.error('关键 DOM 元素缺失');
+    return;
+  }
+
+  // 格式化参数显示（转换为"参数:参数值"格式）
+  const formatParams = (paramsStr) => {
+    if (!paramsStr || paramsStr === '无') return paramsStr;
+
+    // 处理可能的多种分隔符情况
+    const paramPairs = paramsStr.split(/[,;]/).map(pair => {
+      // 分割参数名和参数值（处理可能的空格）
+      const parts = pair.split(/:\s*/);
+      if (parts.length === 2) {
+        return `${parts[0].trim()}:${parts[1].trim()}`;
+      }
+      return pair.trim();
+    });
+
+    return paramPairs.join('; ');
+  };
+
+  // 加载项目列表
+  const loadProjects = () => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/all-projects', true);
+    xhr.timeout = 10000;
+
+    xhr.onloadstart = () => {
+      projectTree.innerHTML = '<li class="text-muted">正在加载项目...</li>';
+    };
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          projectTree.innerHTML = '';
+          if (res && res.code === 200 && Array.isArray(res.data)) {
+            res.data.forEach(project => {
+              const li = document.createElement('li');
+              li.className = 'mb-3 project-item';
+              li.dataset.projectId = project.id;
+              li.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center p-2 rounded border shadow-sm">
+                  <span class="fw-medium project-name">${project.name || '未知项目'}</span>
+                  <button class="btn btn-sm btn-primary generate-btn"
+                          onclick="handleGenerateCases(${project.id}, '${project.name || '未知项目'}', this)">
+                    测试用例生成
+                  </button>
+                </div>
+              `;
+              // 点击项目名称选中项目
+              li.querySelector('.project-name').addEventListener('click', () => {
+                selectProject(project.id, project.name);
+              });
+              projectTree.appendChild(li);
             });
+          } else {
+            projectTree.innerHTML = '<li class="text-danger list-group-item">项目数据格式错误</li>';
+          }
+        } catch (e) {
+          projectTree.innerHTML = '<li class="text-danger list-group-item">项目数据解析错误</li>';
+          console.error('项目数据解析失败:', e);
         }
+      } else {
+        projectTree.innerHTML = `<li class="text-danger list-group-item">项目请求失败，状态码: ${xhr.status}</li>`;
+      }
+    };
 
-        // 保存项目（新增/编辑）
-        $("#saveProject").click(function() {
-            const projectId = $("#projectId").val();
-            const data = {
-                project_name: $("#projectName").val(),
-                description: $("#projectDesc").val()
-            };
+    xhr.onerror = () => {
+      projectTree.innerHTML = '<li class="text-danger list-group-item">项目请求网络错误</li>';
+    };
 
-            const url = projectId ? `/api/projects/${projectId}` : "/api/projects";
-            const method = projectId ? "PUT" : "POST";
+    xhr.ontimeout = () => {
+      projectTree.innerHTML = '<li class="text-danger list-group-item">项目请求超时</li>';
+    };
 
-            $.ajax({
-                url, method, data: JSON.stringify(data),
-                contentType: "application/json",
-                success: function(res) {
-                    if (res.code === 200) {
-                        $("#addProjectModal").modal('hide');
-                        loadProjects();
-                    }
-                }
-            });
-        });
+    xhr.send();
+  };
 
-        // 页面加载时初始化
-        $(() => { loadProjects(); });
-    </script>
-</body>
-</html>
+  // 选中项目
+  window.selectProject = function(projectId, projectName) {
+    // 更新选中状态
+    document.querySelectorAll('.project-item').forEach(item => {
+      item.classList.remove('active');
+    });
+    const selectedItem = document.querySelector(`.project-item[data-project-id="${projectId}"]`);
+    if (selectedItem) {
+      selectedItem.classList.add('active');
+    }
+
+    // 更新状态变量
+    selectedProject = { id: projectId, name: projectName };
+    selectedProjectName.textContent = `${projectName} - 测试用例`;
+
+    // 切换显示区域
+    initialPrompt.style.display = 'none';
+    caseListSection.style.display = 'block';
+
+    // 检查是否有缓存的用例
+    if (projectTestCases[projectId]) {
+      renderTestCases(projectTestCases[projectId]);
+    } else {
+      // 显示加载状态
+      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="bi bi-hourglass"></i> 加载用例中...</td></tr>';
+      noCasePrompt.style.display = 'none';
+
+      // 尝试从服务器加载已存在的用例
+      loadExistingCases(projectId);
+    }
+  };
+
+  // 加载已存在的用例
+  const loadExistingCases = (projectId) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `/api/project/${projectId}/cases`, true);
+    xhr.timeout = 10000;
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res && Array.isArray(res)) {
+            projectTestCases[projectId] = res;
+            renderTestCases(res);
+          } else {
+            // 接口返回格式错误，视为无可用用例
+            projectTestCases[projectId] = [];
+            renderTestCases([]);
+          }
+        } catch (e) {
+          console.error('用例数据解析失败:', e);
+          projectTestCases[projectId] = [];
+          renderTestCases([]);
+        }
+      } else if (xhr.status === 404) {
+        // 无可用用例
+        projectTestCases[projectId] = [];
+        renderTestCases([]);
+      } else {
+        caseTbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">加载用例失败，状态码: ${xhr.status}</td></tr>`;
+        noCasePrompt.style.display = 'none';
+      }
+    };
+
+    xhr.onerror = () => {
+      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">加载用例网络错误</td></tr>';
+      noCasePrompt.style.display = 'none';
+    };
+
+    xhr.ontimeout = () => {
+      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">加载用例超时</td></tr>';
+      noCasePrompt.style.display = 'none';
+    };
+
+    xhr.send();
+  };
+
+  // 生成测试用例
+  window.handleGenerateCases = function(projectId, projectName, btn) {
+    // 先选中项目
+    selectProject(projectId, projectName);
+
+    // 显示生成中状态
+    caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted"><i class="bi bi-hourglass"></i> 生成测试用例中...</td></tr>';
+    noCasePrompt.style.display = 'none';
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', `/api/project/${projectId}/generate_cases`, true);
+    xhr.timeout = 15000;
+
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (res && Array.isArray(res)) {
+            // 缓存生成的用例
+            projectTestCases[projectId] = res;
+            renderTestCases(res);
+          } else {
+            caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">用例数据格式错误</td></tr>';
+          }
+        } catch (e) {
+          caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">用例数据解析错误</td></tr>';
+          console.error('用例数据解析失败:', e);
+        }
+      } else {
+        caseTbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">生成用例失败，状态码: ${xhr.status}</td></tr>`;
+      }
+    };
+
+    xhr.onerror = () => {
+      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">生成用例网络错误</td></tr>';
+    };
+
+    xhr.ontimeout = () => {
+      caseTbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">生成用例超时</td></tr>';
+    };
+
+    xhr.send();
+  };
+
+  // 测试用例操作函数
+  window.testCase = function(caseId) {
+    console.log(`执行测试用例: ${caseId}`);
+    // 测试用例的逻辑实现
+    alert(`正在测试用例 ${caseId}`);
+  };
+
+  window.editCase = function(caseId) {
+    console.log(`编辑测试用例: ${caseId}`);
+    // 编辑用例的逻辑实现
+    alert(`正在编辑用例 ${caseId}`);
+  };
+
+  window.deleteCase = function(caseId) {
+    console.log(`删除测试用例: ${caseId}`);
+    // 删除用例的逻辑实现
+    if (confirm(`确定要删除用例 ${caseId} 吗？`)) {
+      // 执行删除操作
+      alert(`用例 ${caseId} 已删除`);
+      // 如果需要重新加载列表，可以在这里调用相应的函数
+    }
+  };
+
+  // 渲染测试用例列表
+  const renderTestCases = (cases) => {
+    if (cases.length > 0) {
+      caseTbody.innerHTML = '';
+      noCasePrompt.style.display = 'none';
+
+      cases.forEach((caseItem, index) => {
+        // 格式化参数显示
+        const formattedHeaders = formatParams(caseItem.headers);
+        const formattedParams = formatParams(caseItem.params);
+
+        const row = document.createElement('tr');
+        // 为需要截断的列（ID、用例名称、请求头参数、请求参数、预期结果、判定规则）添加title属性，实现悬浮显示完整内容
+        const idCell = `<td title="${caseItem.case_id || index + 1}">${caseItem.case_id || index + 1}</td>`;
+        const nameCell = `<td title="${caseItem.case_name || '无'}">${caseItem.case_name || '无'}</td>`;
+        const headersCell = `<td title="${formattedHeaders || '无'}">${formattedHeaders || '无'}</td>`;
+        const paramsCell = `<td title="${formattedParams || '无'}">${formattedParams || '无'}</td>`;
+        const expectedResultCell = `<td title="${caseItem.expected_result || '无'}">${caseItem.expected_result || '无'}</td>`;
+        const ruleCell = `<td title="${caseItem.judgment_rule || '无'}">${caseItem.judgment_rule || '无'}</td>`;
+        // 操作列，不设置截断，展示测试、编辑、删除按钮
+        const operateCell = `
+          <td>
+            <button class="btn btn-sm btn-success me-1" onclick="testCase(${caseItem.case_id || index + 1})">
+              测试
+            </button>
+            <button class="btn btn-sm btn-warning me-1" onclick="editCase(${caseItem.case_id || index + 1})">
+              编辑
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="deleteCase(${caseItem.case_id || index + 1})">
+              删除
+            </button>
+          </td>
+        `;
+
+        row.innerHTML = `
+          ${idCell}
+          ${nameCell}
+          ${headersCell}
+          ${paramsCell}
+          ${expectedResultCell}
+          ${ruleCell}
+          ${operateCell}
+        `;
+        caseTbody.appendChild(row);
+      });
+    } else {
+      caseTbody.innerHTML = '';
+      noCasePrompt.style.display = 'block';
+    }
+  };
+
+  // 初始化加载项目
+  loadProjects();
+});
+</script>
+<style>
+  /* 项目项基础样式 */
+  .project-item {
+    list-style: none;
+    background-color: #fff;
+    border: 1px solid #ddd;
+    transition: all 0.2s ease;
+  }
+
+  /* 项目选中态样式 - 提高选择器优先级 */
+  .project-item.active {
+    background-color: #0d6efd !important;
+    border-color: #0d6efd !important;
+  }
+
+  /* 选中态下的文字样式 */
+  .project-item.active .project-name {
+    color: #ffffff !important;
+    font-weight: bold;
+  }
+
+  /* 选中态下的按钮样式 */
+  .project-item.active .generate-btn {
+    background-color: #ffffff !important;
+    color: #0d6efd !important;
+    border-color: #ffffff !important;
+  }
+
+  /* 项目名称点击区域样式 */
+  .project-name {
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    color: #212529; /* 默认文字颜色 */
+  }
+
+  .project-name:hover {
+    background-color: rgba(13, 110, 253, 0.1);
+  }
+
+  /* 表格强制按列宽布局 */
+  #caseTable {
+    table-layout: fixed; /* 关键：强制表格按列宽布局 */
+    width: 100%; /* 设置表格宽度为100%，使其适应容器 */
+  }
+
+/* 表格单元格样式：除操作列外，其他列都设置截断和省略号 */
+#caseTable th:not(:nth-child(7)),
+#caseTable td:not(:nth-child(7)) {
+  white-space: nowrap; /* 强制不换行 */
+  overflow: hidden;    /* 溢出隐藏 */
+  text-overflow: ellipsis; /* 溢出显示省略号 */
+  vertical-align: middle;
+}
+/* 各列宽度设置 */
+#caseTable th:nth-child(1), #caseTable td:nth-child(1) {
+  width: 4em;
+}
+#caseTable th:nth-child(2), #caseTable td:nth-child(2) {
+  width: 6em;
+}
+#caseTable th:nth-child(3), #caseTable td:nth-child(3) {
+  width: 6em;
+}
+#caseTable th:nth-child(4), #caseTable td:nth-child(4) {
+  width: 6em;
+}
+#caseTable th:nth-child(5), #caseTable td:nth-child(5) {
+  width: 12em;
+}
+#caseTable th:nth-child(6), #caseTable td:nth-child(6) {
+  width: 6em;
+}
+#caseTable th:nth-child(7), #caseTable td:nth-child(7) {
+  min-width: 16em;
+}
+</style>
+{% endblock %}

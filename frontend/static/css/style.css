@@ -65,4 +65,39 @@
     background-color: #E8F3FF !important; /* 浅蓝色背景 */
     border-right: 1px solid #D0E4FF; /* 右侧边框，增强分隔感 */
 }
-
+/* 在style.css中添加 */
+.test-case-management-page #caseTable th,
+.test-case-management-page #caseTable td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.test-case-management-page #caseTable th:nth-child(1),
+.test-case-management-page #caseTable td:nth-child(1) {
+  width: 4em;
+}
+.test-case-management-page #caseTable th:nth-child(2),
+.test-case-management-page #caseTable td:nth-child(2) {
+  width: 8em;
+}
+.test-case-management-page #caseTable th:nth-child(3),
+.test-case-management-page #caseTable td:nth-child(3) {
+  width: 8em;
+}
+.test-case-management-page #caseTable th:nth-child(4),
+.test-case-management-page #caseTable td:nth-child(4) {
+  width: 8em;
+}
+.test-case-management-page #caseTable th:nth-child(5),
+.test-case-management-page #caseTable td:nth-child(5) {
+  width: 16em;
+}
+.test-case-management-page #caseTable th:nth-child(6),
+.test-case-management-page #caseTable td:nth-child(6) {
+  width: 8em;
+}
+.test-case-management-page #caseTable th:nth-child(7),
+.test-case-management-page #caseTable td:nth-child(7) {
+  min-width: 12em;
+}

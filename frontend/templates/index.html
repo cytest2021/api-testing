@@ -37,7 +37,7 @@
                         <a class="nav-link {% if request.path == '/interface-management' %}active{% endif %}" href="/interface-management">接口管理</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/test-case-management' %}active{% endif %}" href="/test-case-generate">用例管理</a>
+                        <a class="nav-link {% if request.path == '/test-case-management' %}active{% endif %}" href="/test-case-management">用例管理</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link {% if request.path == '/results' %}active{% endif %}" href="/results">测试结果</a>
@@ -56,8 +56,8 @@
     </div>
 
     <!-- 依赖脚本 -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+<!--    <script src="{{ url_for('static', filename='js/main.js') }}"></script>-->
 </body>
 </html>

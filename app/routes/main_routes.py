@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from app.services.excel_parser import parse_excel
 from app.services.postman_parser import PostmanParser
+from app.services.testcase_generator import generate_test_cases
 from app.models import db, Project, User, Interface, InterfaceParam, TestCase, ParamType
 from flask_login import current_user, login_user
 import datetime
@@ -708,13 +709,61 @@ def case_list(interface_id):
 
 
 
+# 生成项目下的测试用例
+@main_bp.route('/api/project/<int:project_id>/generate_cases', methods=['GET'])
+def generate_cases(project_id):
+    project = Project.query.get(project_id)
+    if not project:
+        return jsonify({"error": "项目不存在"}), 404
+
+    all_test_cases = []
+    for interface in project.interfaces:
+        cases = generate_test_cases(interface)
+        all_test_cases.extend(cases)
+
+    return jsonify(all_test_cases), 200
 
 
+# 获取项目下的用例列表（支持搜索）
+@main_bp.route('/api/project/<int:project_id>/cases', methods=['GET'])
+def get_project_cases(project_id):
+    keyword = request.args.get('keyword', '')
+    # 联表查询用例和所属接口
+    query = db.session.query(TestCase, Interface.interface_name) \
+        .join(Interface, TestCase.interface_id == Interface.interface_id) \
+        .filter(Interface.project_id == project_id)
+
+    # 搜索逻辑（模糊匹配用例名称、参数、断言）
+    if keyword:
+        query = query.filter(
+            db.or_(
+                TestCase.case_name.like(f'%{keyword}%'),
+                TestCase.param_values.like(f'%{keyword}%'),
+                TestCase.assert_rule.like(f'%{keyword}%')
+            )
+        )
+
+    cases = query.all()
+    result = []
+    for case, interface_name in cases:
+        result.append({
+            "case_id": case.case_id,
+            "case_name": case.case_name,
+            "interface_name": interface_name,
+            "param_values": case.param_values,
+            "assert_rule": case.assert_rule
+        })
+
+    return jsonify({"code": 200, "data": result})
 
 
-@main_bp.route('/api/generate-cases', methods=['POST'])
-def generate_test_cases():
-    interface_id = request.args.get('interface_id')
-    if not interface_id:
-        return jsonify({"code": 400, "msg": "接口ID不能为空"}), 400
-    return jsonify({"code": 200, "msg": "用例生成逻辑待完善"}), 200
+# 删除用例
+@main_bp.route('/api/case/<int:case_id>', methods=['DELETE'])
+def delete_case(case_id):
+    case = TestCase.query.get(case_id)
+    if not case:
+        return jsonify({"code": 404, "msg": "用例不存在"})
+
+    db.session.delete(case)
+    db.session.commit()
+    return jsonify({"code": 200, "msg": "用例删除成功"})
