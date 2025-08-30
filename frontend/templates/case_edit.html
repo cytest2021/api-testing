@@ -1,0 +1,252 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container" style="width: 800px; margin: 0 auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden;">
+    <div class="header" style="padding: 20px; border-bottom: 1px solid #eee;">
+        <h2>用例编辑</h2>
+    </div>
+
+    <!-- 用例名称 -->
+    <div class="form-section" style="padding: 20px; border-bottom: 1px solid #eee;">
+        <div class="form-item" style="display: flex; align-items: center; margin-bottom: 12px;">
+            <label for="caseName" style="width: 100px; text-align: right; margin-right: 10px; color: #666;">用例名称：</label>
+            <input type="text" id="caseName" class="form-input" style="flex: 1; padding: 8px; border: 1px solid #dcdcdc; border-radius: 4px; font-size: 14px; color: #666;" placeholder="输入用例名称">
+        </div>
+    </div>
+
+    <!-- 请求头参数 -->
+    <div class="form-section" style="padding: 20px; border-bottom: 1px solid #eee;">
+        <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">请求头参数</h3>
+        <div class="param-group" id="headerParamsGroup" style="margin-left: 110px;">
+            <!-- 动态添加的参数会放到这里 -->
+        </div>
+        <div style="margin-left: 110px;">
+            <button class="btn" style="padding: 8px 16px; background: #409eff; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; transition: all 0.3s;" onclick="addParam('header')">添加请求头参数</button>
+        </div>
+    </div>
+
+    <!-- 请求参数 -->
+    <div class="form-section" style="padding: 20px; border-bottom: 1px solid #eee;">
+        <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">请求参数</h3>
+        <div class="param-group" id="requestParamsGroup" style="margin-left: 110px;">
+            <!-- 动态添加的参数会放到这里 -->
+        </div>
+        <div style="margin-left: 110px;">
+            <button class="btn" style="padding: 8px 16px; background: #409eff; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; transition: all 0.3s;" onclick="addParam('request')">添加请求参数</button>
+        </div>
+    </div>
+
+    <!-- 预期结果 -->
+    <div class="form-section" style="padding: 20px; border-bottom: 1px solid #eee;">
+        <div class="form-item" style="display: flex; align-items: center; margin-bottom: 12px;">
+            <label for="expectedResult" style="width: 100px; text-align: right; margin-right: 10px; color: #666;">预期结果：</label>
+            <textarea id="expectedResult" class="form-input" style="flex: 1; padding: 8px; border: 1px solid #dcdcdc; border-radius: 4px; font-size: 14px; color: #666;" rows="5" placeholder="输入预期结果（JSON 格式）"></textarea>
+        </div>
+    </div>
+
+    <!-- 判定规则 -->
+    <div class="form-section" style="padding: 20px; border-bottom: 1px solid #eee;">
+        <h3 style="font-size: 16px; color: #333; margin-bottom: 15px;">判定规则</h3>
+        <div class="rule-item" style="margin-left: 110px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="checkStatus">
+            <label for="checkStatus">校验 status</label>
+        </div>
+        <div class="rule-item" style="margin-left: 110px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="checkCode">
+            <label for="checkCode">校验状态码 code</label>
+        </div>
+        <div class="rule-item" style="margin-left: 110px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="checkBody">
+            <label for="checkBody">校验 body 整体</label>
+        </div>
+        <div class="rule-item" style="margin-left: 110px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="checkBodyParam">
+            <label for="checkBodyParam">校验 body 某个参数</label>
+            <input type="text" id="bodyParamPath" class="form-input" style="display: none; padding: 8px; border: 1px solid #dcdcdc; border-radius: 4px; font-size: 14px; color: #666;" placeholder="参数路径（如 data.name）">
+        </div>
+    </div>
+
+    <!-- 保存按钮 -->
+    <div class="form-section" style="padding: 20px;">
+        <button class="btn save-btn" style="padding: 8px 16px; background: #409eff; color: #fff; border: none; border-radius: 4px; cursor: pointer; margin-left: 110px; transition: all 0.3s;" onclick="saveCase()">保存用例</button>
+    </div>
+</div>
+
+<script>
+    // 封装初始化逻辑到函数，确保 return 在函数作用域内
+    function init() {
+        // 从模板获取后端传递的 case_id（需确保后端渲染时传递 case 变量）
+        const caseId = {{ case.case_id|tojson }};
+
+        // caseId 校验逻辑（return 现在在函数内，语法合法）
+        if (!caseId) {
+            alert('缺少 caseId 参数！请联系管理员');
+            window.location.href = '/test_case_management.html';
+            return;
+        }
+
+        console.log(`正在编辑用例 ID: ${caseId}`);
+
+        // 数据存储（移到函数内，避免全局污染）
+        let headerParams = [];
+        let requestParams = [];
+        let caseData = {};
+
+        // DOM 元素（移到函数内，局部作用域管理）
+        const caseNameInput = document.getElementById('caseName');
+        const expectedResultTextarea = document.getElementById('expectedResult');
+        const checkStatus = document.getElementById('checkStatus');
+        const checkCode = document.getElementById('checkCode');
+        const checkBody = document.getElementById('checkBody');
+        const checkBodyParam = document.getElementById('checkBodyParam');
+        const bodyParamPath = document.getElementById('bodyParamPath');
+        const headerParamsGroup = document.getElementById('headerParamsGroup');
+        const requestParamsGroup = document.getElementById('requestParamsGroup');
+
+        // 初始化：拉取用例详情
+        fetch(`/api/case/${caseId}`)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP 错误！状态码：${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                if (data.code === 200) {
+                    caseData = data.data;
+                    renderForm(caseData);
+                } else {
+                    alert(data.message || '拉取用例详情失败！');
+                }
+            })
+            .catch(err => {
+                console.error('拉取用例详情失败：', err);
+                alert('网络异常，请重试！');
+            });
+
+        // 渲染表单数据（函数内定义，保留原有参数渲染逻辑）
+        function renderForm(caseData) {
+            console.log('接收到的用例数据:', caseData);
+            caseNameInput.value = caseData.case_name || '';
+
+            const expectedResult = caseData.expected_result || {};
+            expectedResultTextarea.value = JSON.stringify(expectedResult, null, 2);
+
+            const rules = caseData.rules || {};
+            checkStatus.checked = rules.status || false;
+            checkCode.checked = rules.code || false;
+            checkBody.checked = rules.body || false;
+            checkBodyParam.checked = rules.body_param || false;
+            bodyParamPath.value = rules.body_param_path || '';
+            bodyParamPath.style.display = checkBodyParam.checked ? 'inline-block' : 'none';
+
+            // 处理请求头参数：对象转数组（若后端返回对象，按之前逻辑转换；若已有数组格式则直接用）
+            const headerParamsObj = caseData.request_header_params || {};
+            const headerParamsArr = Object.entries(headerParamsObj).map(([param_name, param_value]) => ({
+                param_name,
+                param_value,
+            }));
+            headerParams = headerParamsArr;
+            renderParams(headerParams, 'header');
+
+            // 处理请求参数：对象转数组（若后端返回对象，按之前逻辑转换；若已有数组格式则直接用）
+            const requestParamsObj = caseData.request_params || {};
+            const requestParamsArr = Object.entries(requestParamsObj).map(([param_name, param_value]) => ({
+                param_name,
+                param_value,
+            }));
+            requestParams = requestParamsArr;
+            renderParams(requestParams, 'request');
+        }
+
+        // 渲染参数（保留原有展示“参数名”“参数值”逻辑，去掉数据类型）
+        function renderParams(params, type) {
+            console.log('renderParams 接收的参数:', params, '类型:', Object.prototype.toString.call(params));
+            const safeParams = Array.isArray(params) ? params : [];
+            const container = type === 'header' ? headerParamsGroup : requestParamsGroup;
+            container.innerHTML = ''; // 先清空旧内容
+            safeParams.forEach((param, index) => {
+                const div = document.createElement('div');
+                div.className = 'param-item';
+                div.innerHTML = `
+                    <input type="text" placeholder="参数名" value="${param.param_name || ''}" title="参数名" style="padding: 6px; border: 1px solid #dcdcdc; border-radius: 4px; width: 120px;">
+                    <input type="text" placeholder="参数值" value="${param.param_value || ''}" title="参数值" style="padding: 6px; border: 1px solid #dcdcdc; border-radius: 4px; width: 120px;">
+                    <button class="btn remove-btn" onclick="removeParam('${type}', ${index})" style="padding: 6px 12px; background: #f56c6c; color: #fff; border: none; border-radius: 4px; cursor: pointer;">删除</button>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // 删除参数（保持全局暴露，方便按钮调用）
+        window.removeParam = function (type, index) {
+            const targetParams = type === 'header' ? headerParams : requestParams;
+            (targetParams || []).splice(index, 1);
+            renderParams(targetParams, type);
+        }
+
+        // 添加参数（保持全局暴露，方便按钮调用）
+        window.addParam = function (type) {
+            const newParam = { param_name: '', param_value: '' };
+            const targetParams = type === 'header' ? headerParams : requestParams;
+            (targetParams || []).push(newParam);
+            renderParams(targetParams, type);
+        }
+
+        // 保存用例（保持全局暴露，保留原有参数存储逻辑）
+        window.saveCase = function () {
+            const caseName = caseNameInput.value.trim();
+            const expectedResult = expectedResultTextarea.value.trim();
+            const rules = {
+                status: checkStatus.checked,
+                code: checkCode.checked,
+                body: checkBody.checked,
+                body_param: checkBodyParam.checked,
+                body_param_path: bodyParamPath.value.trim()
+            };
+
+            if (!caseName) {
+                alert('用例名称不能为空！');
+                return;
+            }
+
+            // 构建请求头参数、请求参数：数组转对象
+            const headerParamsObj = Object.fromEntries(headerParams.map(({ param_name, param_value }) => [param_name, param_value]));
+            const requestParamsObj = Object.fromEntries(requestParams.map(({ param_name, param_value }) => [param_name, param_value]));
+
+            const requestData = {
+                case_id: caseId,
+                case_name: caseName,
+                request_header_params: headerParamsObj,
+                request_params: requestParamsObj,
+                expected_result: expectedResult ? JSON.parse(expectedResult) : {},
+                rules: rules
+            };
+
+            fetch('/api/case/edit', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.code === 200) {
+                    alert('保存成功！');
+                    // 跳转到用例管理页面路由，根据实际调整
+                    window.location.href = '/test-case-management';
+                } else {
+                    alert('保存失败：' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error('保存失败：', err);
+                alert('网络异常，请重试！');
+            });
+        }
+
+        // 监听校验 body 某个参数的 checkbox 状态
+        checkBodyParam.addEventListener('change', () => {
+            bodyParamPath.style.display = checkBodyParam.checked ? 'inline-block' : 'none';
+        });
+    }
+
+    // 页面加载后执行初始化
+    window.onload = init;
+</script>
+{% endblock %}

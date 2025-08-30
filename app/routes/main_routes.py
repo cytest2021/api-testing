@@ -1,13 +1,17 @@
+from json import JSONDecodeError
 from flask import Blueprint, request, jsonify, render_template, redirect, url_for
 from app.services.excel_parser import parse_excel
 from app.services.postman_parser import PostmanParser
-from app.services.testcase_generator import generate_test_cases
+from app.services.testcase_generator import generate_test_cases,generate_test_cases_by_project
 from app.models import db, Project, User, Interface, InterfaceParam, TestCase, ParamType
 from flask_login import current_user, login_user
 import datetime
 from sqlalchemy.orm import joinedload
 import os
 import json
+from sqlalchemy.exc import SQLAlchemyError
+from openpyxl import Workbook
+import io
 
 
 main_bp = Blueprint('main', __name__)
@@ -683,125 +687,209 @@ def save_interface():
 def project_management():
     return render_template('test_case_management.html')
 
-# --------------------- 编辑接口信息后保存 ---------------------
-@main_bp.route('/case/list/<int:interface_id>')
-def case_list(interface_id):
-    return render_template('case_list.html', interface_id=interface_id)
 
-
-
-# 生成项目下的测试用例
 @main_bp.route('/api/project/<int:project_id>/generate_cases', methods=['GET'])
 def generate_cases(project_id):
-    """为项目下所有接口生成测试用例"""
-    # 验证项目是否存在
-    project = Project.query.get(project_id)
-    if not project:
-        return jsonify({"code": 404, "message": "项目不存在"}), 404
-
-    # 获取项目下所有接口
-    interfaces = Interface.query.filter_by(project_id=project_id).all()
-    if not interfaces:
-        return jsonify({"code": 200, "message": "项目下无接口，无需生成用例"}), 200
-
-    total_cases = 0
-    for interface in interfaces:
-        # 调用已有的生成用例函数
-        result = generate_test_cases(interface.id, creator_id=project.creator_id)
-        # 解析生成结果中的用例数量
-        if "成功生成" in result:
-            case_count = int(result.split("成功生成")[1].split("条用例")[0])
-            total_cases += case_count
-
-    return jsonify({
-        "code": 200,
-        "message": f"项目测试用例生成完成，共生成{total_cases}条用例"
-    }), 200
-
-
-@main_bp.route('/api/generate-cases', methods=['POST'])
-def generate_cases_api():
-    interface_id = request.args.get('interface_id')
-    if not interface_id:
-        return jsonify({"code": 400, "msg": "接口ID不能为空"})
-
+    """为项目下所有接口生成测试用例，按接口ID顺序生成，支持跳过已存在用例、补充缺失用例"""
     try:
-        # 获取当前用户ID
-        creator_id = current_user.user_id if hasattr(current_user, 'user_id') else 1
-        result = generate_test_cases(int(interface_id), creator_id)
-        return jsonify({"code": 200, "msg": result})
+        # 1. 验证项目是否存在
+        project = Project.query.get(project_id)
+        if not project:
+            return jsonify({"code": 404, "message": "项目不存在"}), 404
+
+        # 检查项目是否包含 creator_id 字段
+        if not hasattr(project, 'creator_id'):
+            return jsonify({"code": 500, "message": "项目模型缺少creator_id字段"}), 500
+
+        # 2. 调用项目维度生成用例函数
+        result = generate_test_cases_by_project(
+            project_id=project_id,
+            creator_id=project.creator_id
+        )
+
+        # 3. 解析生成结果（适配新函数返回，区分新增、已存在统计）
+        # 示例返回格式："用例生成完成：新增 3 条，已存在 5 条（未重复生成）"
+        if "新增" in result and "已存在" in result:
+            return jsonify({
+                "code": 200,
+                "message": result
+            }), 200
+        elif "成功生成" in result:  # 兼容旧格式（如果有需要）
+            parts = result.split("成功生成 ")
+            if len(parts) > 1:
+                num_part = parts[1].split(" 条用例")[0].strip()
+                if num_part.isdigit():
+                    total_cases = int(num_part)
+                    return jsonify({
+                        "code": 200,
+                        "message": f"项目测试用例生成完成，共生成{total_cases}条用例"
+                    }), 200
+                else:
+                    return jsonify({
+                        "code": 500,
+                        "message": f"解析用例数量失败：结果格式不正确，原始结果：{result}"
+                    }), 500
+            else:
+                return jsonify({
+                    "code": 500,
+                    "message": f"解析用例数量失败：结果格式不正确，原始结果：{result}"
+                }), 500
+        else:
+            # 生成失败场景，直接返回失败信息
+            return jsonify({
+                "code": 500,
+                "message": f"生成用例失败：{result}"
+            }), 500
+
     except Exception as e:
-        return jsonify({"code": 500, "msg": f"生成用例失败：{str(e)}"})
+        # 捕获所有未处理异常并返回详细信息
+        return jsonify({
+            "code": 500,
+            "message": f"服务器内部错误：{str(e)}"
+        }), 500
 
 
-# 修改获取用例列表的接口，支持新的参数展示方式
-@main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
-def get_interface_cases(interface_id):
+@main_bp.route('/api/project/<int:project_id>/cases', methods=['GET'])
+def get_project_cases(project_id):
     try:
-        cases = TestCase.query.filter_by(interface_id=interface_id).all()
-        case_list = []
+        # 联表查询用例和所属接口，获取项目下所有用例
+        cases = db.session.query(TestCase).join(Interface, TestCase.interface_id == Interface.interface_id).filter(
+            Interface.project_id == project_id).all()
+        result = []
         for case in cases:
-            # 格式化请求头和请求参数为"key: value"形式
-            header_str = ""
-            if case.request_header:
-                try:
-                    headers = json.loads(case.request_header)
-                    header_str = ", ".join([f"{k}: {v}" for k, v in headers.items()])
-                except:
-                    header_str = case.request_header
-
-            param_str = ""
-            if case.request_param:
-                try:
-                    params = json.loads(case.request_param)
-                    param_str = ", ".join([f"{k}: {v}" for k, v in params.items()])
-                except:
-                    param_str = case.request_param
-
-            case_list.append({
+            result.append({
                 "case_id": case.case_id,
                 "case_name": case.case_name,
-                "request_header": header_str,
-                "request_param": param_str,
+                "request_header": case.request_header,
+                "request_param": case.request_param,
                 "expected_result": case.expected_result,
                 "assert_rule": case.assert_rule
             })
-        return jsonify({"code": 200, "data": case_list})
+        return jsonify({"code": 200, "data": result}), 200
     except Exception as e:
-        return jsonify({"code": 500, "msg": f"获取用例失败：{str(e)}"})
+        return jsonify({"code": 500, "msg": f"获取项目用例失败：{str(e)}"}), 500
 
 
-# # 获取项目下的用例列表（支持搜索）
-# @main_bp.route('/api/project/<int:project_id>/cases', methods=['GET'])
-# def get_project_cases(project_id):
-#     keyword = request.args.get('keyword', '')
-#     # 联表查询用例和所属接口
-#     query = db.session.query(TestCase, Interface.interface_name) \
-#         .join(Interface, TestCase.interface_id == Interface.interface_id) \
-#         .filter(Interface.project_id == project_id)
-#
-#     # 搜索逻辑（模糊匹配用例名称、参数、断言）
-#     if keyword:
-#         query = query.filter(
-#             db.or_(
-#                 TestCase.case_name.like(f'%{keyword}%'),
-#                 TestCase.param_values.like(f'%{keyword}%'),
-#                 TestCase.assert_rule.like(f'%{keyword}%')
-#             )
-#         )
-#
-#     cases = query.all()
-#     result = []
-#     for case, interface_name in cases:
-#         result.append({
-#             "case_id": case.case_id,
-#             "case_name": case.case_name,
-#             "interface_name": interface_name,
-#             "param_values": case.param_values,
-#             "assert_rule": case.assert_rule
-#         })
-#
-#     return jsonify({"code": 200, "data": result})
+# # 修改获取单个接口下用例列表接口
+# @main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
+# def get_interface_cases(interface_id):
+#     try:
+#         cases = TestCase.query.filter_by(interface_id=interface_id).all()
+#         case_list = []
+#         for case in cases:
+#             case_list.append({
+#                 "case_id": case.case_id,
+#                 "case_name": case.case_name,
+#                 "request_header": case.request_header,
+#                 "request_param": case.request_param,
+#                 "expected_result": case.expected_result,
+#                 "assert_rule": case.assert_rule
+#             })
+#         return jsonify({"code": 200, "data": case_list}), 200
+#     except Exception as e:
+#         return jsonify({"code": 500, "msg": f"获取用例失败：{str(e)}"}), 500
+
+# 1. 拉取用例详情（增强空值与异常处理）
+@main_bp.route('/api/case/<int:case_id>', methods=['GET'])
+def get_case_detail(case_id):
+    try:
+        case = TestCase.query.get(case_id)
+        if not case:
+            return jsonify({"code": 404, "message": "用例不存在"}), 404
+
+        # 防御性解析：空值或无效JSON时返回空字典
+        def safe_json_loads(field_value):
+            if not field_value:
+                return {}
+            try:
+                return json.loads(field_value)
+            except JSONDecodeError:
+                return {}  # 无效JSON时返回空字典，避免前端报错
+
+        return jsonify({
+            "code": 200,
+            "data": {
+                "case_id": case.case_id,
+                "case_name": case.case_name,
+                "request_header_params": safe_json_loads(case.request_header),
+                "request_params": safe_json_loads(case.request_param),
+                "expected_result": safe_json_loads(case.expected_result),
+                "rules": safe_json_loads(case.assert_rule)
+            }
+        }), 200
+
+    except JSONDecodeError as e:
+        return jsonify({"code": 500, "message": f"解析数据失败：{str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"code": 500, "message": f"服务器异常：{str(e)}"}), 500
+
+
+# 2. 保存编辑后的用例（确保数据正确序列化）
+@main_bp.route('/api/case/edit', methods=['PUT'])
+def edit_case():
+    data = request.json
+    case_id = data.get('case_id')
+    if not case_id:
+        return jsonify({"code": 400, "message": "缺少 case_id"}), 400
+
+    try:
+        case = TestCase.query.get(case_id)
+        if not case:
+            return jsonify({"code": 404, "message": "用例不存在"}), 404
+
+        # 字段更新：空值处理 + 强制序列化（避免非字典类型）
+        def safe_json_dumps(value, default={}):
+            if not value:
+                return json.dumps(default, ensure_ascii=False)
+            # 确保是可序列化类型（如字典），否则用默认值
+            return json.dumps(value, ensure_ascii=False) if isinstance(value, dict) else json.dumps(default, ensure_ascii=False)
+
+        case.case_name = data.get('case_name', case.case_name)
+        case.request_header = safe_json_dumps(data.get('request_header_params'))
+        case.request_param = safe_json_dumps(data.get('request_params'))
+        case.expected_result = safe_json_dumps(data.get('expected_result'))
+        case.assert_rule = safe_json_dumps(data.get('rules'))
+
+        db.session.commit()
+        return jsonify({"code": 200, "message": "保存成功"}), 200
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        return jsonify({"code": 500, "message": f"数据库操作失败：{str(e)}"}), 500
+    except Exception as e:
+        return jsonify({"code": 500, "message": f"服务器异常：{str(e)}"}), 500
+
+
+# 3. 渲染编辑页面（增强前端初始化兼容性）
+@main_bp.route('/case/edit/<int:case_id>')
+def render_case_edit(case_id):
+    try:
+        # 直接查询用例
+        case = TestCase.query.get(case_id)
+        print(f"获取到的用例: {case}")  # 添加这行代码，打印获取到的用例对象
+        if not case:
+            return jsonify({"code": 404, "message": "用例不存在"}), 404
+
+        # 安全解析 JSON 字段
+        def safe_load(field):
+            print(f"解析字段: {field}")
+            if not field or field.strip() == "":
+                print("字段为空，返回空对象")
+                return {}
+
+        # 显式构建 case_data，确保包含 case_id
+        case_data = {
+            "case_id": case.case_id,
+            "case_name": case.case_name,
+            "request_header_params": safe_load(case.request_header),
+            "request_params": safe_load(case.request_param),
+            "expected_result": safe_load(case.expected_result),
+            "rules": safe_load(case.assert_rule)
+        }
+        return render_template('case_edit.html', case=case_data)
+    except Exception as e:
+        print(f"JSON 解析失败:{e}")
+        return f"服务器异常：{str(e)}", 500
 
 
 # 删除用例
@@ -814,3 +902,120 @@ def delete_case(case_id):
     db.session.delete(case)
     db.session.commit()
     return jsonify({"code": 200, "msg": "用例删除成功"})
+
+
+# -------------------- 新增复制测试用例的路由 --------------------
+@main_bp.route('/api/case/<int:caseId>/copy', methods=['POST'])
+def copy_test_case(caseId):
+    try:
+        # 1. 查询原用例信息
+        original_case = TestCase.query.filter_by(case_id=caseId).first()
+        if not original_case:
+            return jsonify({
+                "code": 404,
+                "message": "原用例不存在"
+            }), 200
+
+        # 2. 校验当前用户是否登录（flask_login 核心功能）
+        if not current_user.is_authenticated:
+            return jsonify({
+                "code": 401,
+                "message": "用户未登录，无法复制用例"
+            }), 401  # 返回 401 更符合未授权场景
+
+        # 3. 复制用例数据（排除自动生成字段，补充必要字段）
+        copy_data = {
+            "case_name": original_case.case_name + "（复制）",
+            "request_header": original_case.request_header,
+            "request_param": original_case.request_param,
+            "expected_result": original_case.expected_result,
+            "assert_rule": original_case.assert_rule,
+            "interface_id": original_case.interface_id,  # 继承原用例的 interface_id
+            "creator_id": current_user.user_id,  # 使用当前登录用户的 ID 作为 creator_id
+            # 若有其他非空字段（如 project_id 等），需在此补充
+        }
+
+        # 4. 保存新用例到数据库
+        new_case = TestCase(**copy_data)
+        db.session.add(new_case)
+        db.session.commit()
+
+        # 5. 返回成功响应，包含新用例 ID
+        return jsonify({
+            "code": 200,
+            "message": "用例复制成功",
+            "data": {
+                "new_case_id": new_case.case_id
+            }
+        }), 200
+
+    except SQLAlchemyError as e:
+        db.session.rollback()  # 回滚事务，避免脏数据
+        print("数据库操作失败:", str(e))  # 记录详细错误
+        return jsonify({
+            "code": 500,
+            "message": "服务器错误，复制用例失败（数据库操作异常）"
+        }), 500
+    except Exception as e:
+        print("未知错误:", str(e))  # 捕获其他异常
+        return jsonify({
+            "code": 500,
+            "message": "服务器错误，复制用例失败（未知异常）"
+        }), 500
+
+
+@main_bp.route('/api/export-cases', methods=['POST'])
+def export_cases():
+    """
+    接收前端传递的用例 ID 列表，从 TestCase 模型查询数据并生成 Excel 导出
+    """
+    try:
+        # 获取前端传递的 JSON 数据，提取要导出的用例 ID 列表
+        data = request.get_json()
+        case_ids = data.get('case_ids', [])
+
+        if not case_ids:
+            return jsonify({"code": 400, "message": "请选择要导出的用例"}), 400
+
+        # 使用 SQLAlchemy 从数据库查询对应的用例数据
+        # 假设 TestCase 模型中有 case_id、case_name、request_header 等字段
+        test_cases = TestCase.query.filter(TestCase.case_id.in_(case_ids)).all()
+
+        if not test_cases:
+            return jsonify({"code": 404, "message": "未查询到对应测试用例"}), 404
+
+        # 创建 Excel 工作簿和工作表
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "测试用例导出"
+
+        # 写入表头（根据 TestCase 模型字段调整）
+        headers = ["用例 ID", "用例名称", "请求头参数", "请求参数", "预期结果", "判定规则"]
+        ws.append(headers)
+
+        # 遍历查询到的用例数据，写入 Excel 行
+        for case in test_cases:
+            row_data = [
+                case.case_id,
+                case.case_name,
+                case.request_header,
+                case.request_param,
+                case.expected_result,
+                case.assert_rule
+            ]
+            ws.append(row_data)
+
+        # 将生成的 Excel 保存到内存缓冲区
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)  # 将指针移到缓冲区开头，方便后续读取
+
+        # 设置响应头，让浏览器触发文件下载
+        return buffer.read(), 200, {
+            'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition': 'attachment; filename=test_cases.xlsx'
+        }
+    except Exception as e:
+        # 捕获异常，返回错误信息
+        print(f"导出用例失败: {e}")
+        return jsonify({"code": 500, "message": "服务器内部错误，导出失败"}), 500

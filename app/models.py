@@ -183,9 +183,9 @@ class TestCase(db.Model):
     # 在TestCase模型中添加字段
     request_header = db.Column(db.Text, nullable=True)  # 存储请求头参数
     request_param = db.Column(db.Text, nullable=True)  # 存储请求参数（path/query/body）
-    param_values = db.Column(db.Text, nullable=True)
+    # param_values = db.Column(db.Text, nullable=True)
     expected_result = db.Column(db.Text, nullable=True)
-    assert_rule = db.Column(db.String(200), nullable=True)
+    assert_rule = db.Column(db.Text, nullable=True)
     creator_id = db.Column(db.Integer, db.ForeignKey('user.user_id'), nullable=False)
     create_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
