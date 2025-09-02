@@ -70,6 +70,22 @@ def generate_test_cases(interface_id, creator_id):
         param_type=ParamType.RESPONSE
     ).order_by(InterfaceParam.param_id).all()
 
+    # 定义两种断言规则模板
+    normal_assert_rule = {
+        "status": True,
+        "code": False,
+        "body": True,
+        "body_param": False,
+        "body_param_path": ""
+    }
+    default_assert_rule = {
+        "status": False,
+        "code": False,
+        "body": False,
+        "body_param": False,
+        "body_param_path": ""
+    }
+
     # 3. 生成所有可能的用例（先在内存中构造）
     candidate_cases = []
 
@@ -86,7 +102,8 @@ def generate_test_cases(interface_id, creator_id):
         request_header=json.dumps(normal_header, ensure_ascii=False),
         request_param=json.dumps(normal_request, ensure_ascii=False),
         expected_result=json.dumps(normal_response, ensure_ascii=False),
-        assert_rule="响应状态码为200且参数匹配",
+        # 正常用例使用特定的断言规则
+        assert_rule=json.dumps(normal_assert_rule, ensure_ascii=False),
         creator_id=creator_id,
         create_time=datetime.datetime.now()
     ))
@@ -115,7 +132,8 @@ def generate_test_cases(interface_id, creator_id):
             request_header=json.dumps(err_header, ensure_ascii=False),
             request_param=json.dumps(err_request, ensure_ascii=False),
             expected_result="",
-            assert_rule=f"响应包含缺失{param.param_name}的错误",
+            # 异常用例使用默认断言规则（全部不选中）
+            assert_rule=json.dumps(default_assert_rule, ensure_ascii=False),
             creator_id=creator_id,
             create_time=datetime.datetime.now()
         ))
@@ -158,7 +176,8 @@ def generate_test_cases(interface_id, creator_id):
             request_header=json.dumps(min_header, ensure_ascii=False),
             request_param=json.dumps(min_request, ensure_ascii=False),
             expected_result="",
-            assert_rule=f"响应状态码为200或包含参数错误（{param.param_name}最小值）",
+            # 异常用例使用默认断言规则（全部不选中）
+            assert_rule=json.dumps(default_assert_rule, ensure_ascii=False),
             creator_id=creator_id,
             create_time=datetime.datetime.now()
         ))
@@ -178,7 +197,8 @@ def generate_test_cases(interface_id, creator_id):
             request_header=json.dumps(max_header, ensure_ascii=False),
             request_param=json.dumps(max_request, ensure_ascii=False),
             expected_result="",
-            assert_rule=f"响应状态码为200或包含参数错误（{param.param_name}最大值）",
+            # 异常用例使用默认断言规则（全部不选中）
+            assert_rule=json.dumps(default_assert_rule, ensure_ascii=False),
             creator_id=creator_id,
             create_time=datetime.datetime.now()
         ))
@@ -198,7 +218,8 @@ def generate_test_cases(interface_id, creator_id):
             request_header=json.dumps(out_header, ensure_ascii=False),
             request_param=json.dumps(out_request, ensure_ascii=False),
             expected_result="",
-            assert_rule=f"响应包含参数超出范围错误（{param.param_name}）",
+            # 异常用例使用默认断言规则（全部不选中）
+            assert_rule=json.dumps(default_assert_rule, ensure_ascii=False),
             creator_id=creator_id,
             create_time=datetime.datetime.now()
         ))

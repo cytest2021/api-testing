@@ -3,6 +3,8 @@ from flask import Flask
 from .models import db, User  # 导入数据库实例、User 模型
 from app.routes.main_routes import main_bp  # 导入主蓝图
 from flask_login import LoginManager
+import json
+from jinja2 import Environment
 
 # 初始化登录管理器
 login_manager = LoginManager()
@@ -33,6 +35,18 @@ def create_app():
     # 安全配置（Flask-Login 必须）
     app.config['SECRET_KEY'] = 'your-secure-secret-key-12345'  # 建议替换为随机字符串（至少24字符）
 
+    # 自定义from_json过滤器
+    def from_json(value):
+        """将JSON字符串转换为Python对象"""
+        try:
+            return json.loads(value) if value else None
+        except json.JSONDecodeError:
+            app.logger.error(f"无法解析JSON字符串: {value}")
+            return None
+
+    # 注册过滤器到Jinja2环境
+    app.jinja_env.filters['fromjson'] = from_json
+
     # 4. 初始化扩展（使用同一个 app 实例）
     login_manager.init_app(app)  # 初始化登录管理器
 
@@ -51,9 +65,9 @@ def create_app():
         db.create_all()  # 根据模型自动创建表
         print("数据库表创建完成")
 
-    # 验证配置是否正确
-    print(f"模板目录验证: {template_path} (是否存在: {os.path.exists(template_path)})")
-    print(f"静态目录验证: {static_path} (是否存在: {os.path.exists(static_path)})")  # 新增静态目录验证
-    print(f"数据库URI配置: {app.config['SQLALCHEMY_DATABASE_URI']}")
+    # # 验证配置是否正确
+    # print(f"模板目录验证: {template_path} (是否存在: {os.path.exists(template_path)})")
+    # print(f"静态目录验证: {static_path} (是否存在: {os.path.exists(static_path)})")  # 新增静态目录验证
+    # print(f"数据库URI配置: {app.config['SQLALCHEMY_DATABASE_URI']}")
 
     return app

@@ -3,7 +3,7 @@ from flask import Blueprint, request, jsonify, render_template, redirect, url_fo
 from app.services.excel_parser import parse_excel
 from app.services.postman_parser import PostmanParser
 from app.services.testcase_generator import generate_test_cases,generate_test_cases_by_project
-from app.models import db, Project, User, Interface, InterfaceParam, TestCase, ParamType
+from app.models import db, Project, User, Interface, InterfaceParam, TestCase, ParamType,InterfaceDependency
 from flask_login import current_user, login_user
 import datetime
 from sqlalchemy.orm import joinedload
@@ -77,6 +77,14 @@ def interface_edit(interface_id):
     }
 
     return render_template('interface_edit.html', interface=interface_detail)
+
+# # 依赖配置页面路由
+# @main_bp.route('/interface/dependency/config')
+# def interface_dependency_config():
+#     # 可以从请求参数中获取 interface_id
+#     interface_id = request.args.get('interface_id')
+#     # 这里可以添加获取接口信息等业务逻辑
+#     return render_template('interface_dependency_config.html', interface_id=interface_id)
 
 # --------------------- 删除接口 ---------------------
 @main_bp.route('/api/interface/<int:interface_id>', methods=['DELETE'])
@@ -1019,3 +1027,254 @@ def export_cases():
         # 捕获异常，返回错误信息
         print(f"导出用例失败: {e}")
         return jsonify({"code": 500, "message": "服务器内部错误，导出失败"}), 500
+
+
+# 核心：接口依赖配置页面路由
+# --------------------------
+@main_bp.route('/interface/dependency/config')
+def interface_dependency_config():
+    # 1. 从URL参数中获取当前接口ID（必传参数）
+    interface_id = request.args.get('interface_id')
+    if not interface_id:
+        return render_template('error.html', msg="缺少参数：interface_id"), 400
+
+    # 2. 查询当前接口信息（预加载关联的参数，避免后续模板渲染时二次查询）
+    # 使用 joinedload 预加载接口的参数列表（Interface.param 关系）
+    current_interface = Interface.query.filter_by(interface_id=interface_id).options(
+        joinedload(Interface.params)  # 预加载接口的所有参数
+    ).first()
+
+    # 处理接口不存在的情况
+    if not current_interface:
+        return render_template('error.html', msg=f"接口ID {interface_id} 不存在"), 404
+
+    # 3. 查询所有接口（用于前置接口选择下拉框，排除当前接口自身）
+    all_interfaces = Interface.query.filter(
+        Interface.interface_id != interface_id  # 禁止选择自身作为前置接口
+    ).all()
+
+    # 4. 查询当前接口的「前置依赖」（当前接口作为后置接口）
+    # 关联查询前置接口的基础信息（避免模板中访问 pre_interface 时出现空值）
+    front_dependencies = InterfaceDependency.query.filter_by(
+        post_interface_id=interface_id
+    ).all()
+    # 为每个依赖补充前置接口的完整信息（通过接口ID关联）
+    for dep in front_dependencies:
+        dep.pre_interface = Interface.query.get(dep.pre_interface_id)
+
+    # 5. 查询当前接口的「被依赖情况」（当前接口作为前置接口）
+    back_dependencies = InterfaceDependency.query.filter_by(
+        pre_interface_id=interface_id
+    ).all()
+    # 为每个依赖补充后置接口的完整信息
+    for dep in back_dependencies:
+        dep.post_interface = Interface.query.get(dep.post_interface_id)
+
+    # 6. 将所有变量传递给模板（与模板中使用的变量名完全对应）
+    return render_template(
+        'interface_dependency_config.html',
+        # 当前接口信息（模板中用 current_interface 访问）
+        current_interface=current_interface,
+        # 所有接口列表（模板中用于选择前置接口）
+        all_interfaces=all_interfaces,
+        # 当前接口的前置依赖（模板中用 dependencies 访问）
+        dependencies=front_dependencies,
+        # 当前接口的被依赖情况（模板中用 dependent_interfaces 访问）
+        dependent_interfaces=back_dependencies
+    )
+
+
+# --------------------------
+# 辅助接口：获取接口参数（供前端加载目标参数下拉框）
+# --------------------------
+@main_bp.route('/api/interface/<int:interface_id>/parameters')
+def get_interface_parameters(interface_id):
+    """根据接口ID和参数类型（header/path/query/body）获取参数列表"""
+    # 获取参数类型（默认请求头参数）
+    param_type = request.args.get('type', 'header').upper()  # 转为大写，匹配 ParamType 枚举
+
+    # 查询接口的参数（过滤指定类型）
+    params = InterfaceParam.query.filter_by(
+        interface_id=interface_id,
+        param_type=param_type  # 匹配 ParamType 枚举（如 HEADER/PATH/QUERY/BODY）
+    ).all()
+
+    # 构造返回数据（供前端下拉框使用）
+    result = [
+        {
+            'param_name': param.param_name,
+            'data_type': param.data_type,
+            'example_value': param.example_value
+        }
+        for param in params
+    ]
+
+    return jsonify({
+        'code': 200,
+        'data': result
+    })
+
+
+# --------------------------
+# 辅助接口：获取接口响应示例（供前端预览提取规则）
+# --------------------------
+@main_bp.route('/api/interface/<int:interface_id>/response-example')
+def get_interface_response_example(interface_id):
+    """获取接口的真实响应示例（从数据库 InterfaceParam 表中读取）"""
+    # 查询 InterfaceParam 表中，interface_id 匹配且参数名为 body 且 param_type 为 RESPONSE 的记录
+    response_param = InterfaceParam.query.filter_by(
+        interface_id=interface_id,
+        param_name='body',
+        param_type='RESPONSE'
+    ).first()
+
+    if not response_param:
+        # 如果没有找到对应的响应参数，返回模拟数据或错误提示
+        mock_response = {
+            "code": 200,
+            "data": {},
+            "msg": "未找到接口响应示例"
+        }
+        return jsonify({
+            'code': 200,
+            'data': json.dumps(mock_response)
+        })
+
+    try:
+        # 将数据库中存储的 example_value（JSON 字符串）转换为 Python 对象
+        real_response = json.loads(response_param.example_value)
+        return jsonify({
+            'code': 200,
+            'data': json.dumps(real_response)
+        })
+    except json.JSONDecodeError as e:
+        # 如果 example_value 不是有效的 JSON 格式，返回错误
+        return jsonify({
+            'code': 500,
+            'msg': f"响应示例 JSON 解析错误: {str(e)}"
+        })
+
+
+# --------------------------
+# 辅助接口：保存/更新依赖配置
+# --------------------------
+@main_bp.route('/api/dependency/save', methods=['POST'])
+def save_dependency():
+    """保存或更新接口依赖配置"""
+    import json
+    data = request.form.get('data')
+    if not data:
+        return jsonify({'code': 400, 'msg': '缺少依赖配置数据'})
+
+    try:
+        dep_data = json.loads(data)
+        dependency_id = dep_data.get('dependency_id')  # 有值则为更新，无值则为新增
+        pre_interface_id = dep_data.get('pre_interface_id')
+        post_interface_id = dep_data.get('post_interface_id')
+        param_pass_rule = dep_data.get('param_pass_rule')
+        dep_type = dep_data.get('dep_type', 'normal')
+
+        # 验证必填字段
+        if not (pre_interface_id and post_interface_id and param_pass_rule):
+            return jsonify({'code': 400, 'msg': '前置接口ID、后置接口ID、参数传递规则为必填项'})
+
+        # 新增依赖
+        if not dependency_id:
+            # 检查是否已存在相同依赖（避免重复）
+            existing_dep = InterfaceDependency.query.filter_by(
+                pre_interface_id=pre_interface_id,
+                post_interface_id=post_interface_id
+            ).first()
+            if existing_dep:
+                return jsonify({'code': 400, 'msg': '该前置-后置接口依赖已存在'})
+
+            new_dep = InterfaceDependency(
+                pre_interface_id=pre_interface_id,
+                post_interface_id=post_interface_id,
+                param_pass_rule=param_pass_rule,
+                dep_type=dep_type
+            )
+            db.session.add(new_dep)
+            db.session.commit()
+            return jsonify({'code': 200, 'msg': '依赖添加成功'})
+
+        # 更新依赖
+        else:
+            dep = InterfaceDependency.query.get(dependency_id)
+            if not dep:
+                return jsonify({'code': 404, 'msg': '依赖记录不存在'})
+
+            dep.pre_interface_id = pre_interface_id
+            dep.post_interface_id = post_interface_id
+            dep.param_pass_rule = param_pass_rule
+            dep.dep_type = dep_type
+            db.session.commit()
+            return jsonify({'code': 200, 'msg': '依赖更新成功'})
+
+    except json.JSONDecodeError:
+        return jsonify({'code': 400, 'msg': '配置数据格式错误（需JSON格式）'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'code': 500, 'msg': f'服务器错误：{str(e)}'})
+
+
+# --------------------------
+# 辅助接口：删除依赖配置
+# --------------------------
+@main_bp.route('/api/dependency/<int:dependency_id>', methods=['DELETE'])
+def delete_dependency(dependency_id):
+    """删除指定ID的依赖配置"""
+    dep = InterfaceDependency.query.get(dependency_id)
+    if not dep:
+        return jsonify({'code': 404, 'msg': '依赖记录不存在'})
+
+    try:
+        db.session.delete(dep)
+        db.session.commit()
+        return jsonify({'code': 200, 'msg': '依赖删除成功'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'code': 500, 'msg': f'删除失败：{str(e)}'})
+
+
+# --------------------------
+# 辅助接口：获取依赖详情
+# --------------------------
+@main_bp.route('/api/dependency/<int:dependency_id>')
+def get_dependency_detail(dependency_id):
+    """获取指定ID的依赖配置详情"""
+    dep = InterfaceDependency.query.get(dependency_id)
+    if not dep:
+        return jsonify({'code': 404, 'msg': '依赖记录不存在'})
+
+    # 补充前置/后置接口信息
+    pre_interface = Interface.query.get(dep.pre_interface_id)
+    post_interface = Interface.query.get(dep.post_interface_id)
+
+    return jsonify({
+        'code': 200,
+        'data': {
+            'dependency_id': dep.dependency_id,
+            'pre_interface_id': dep.pre_interface_id,
+            'pre_interface': {
+                'name': pre_interface.interface_name if pre_interface else '未知接口',
+                'method': pre_interface.method.name if (pre_interface and pre_interface.method) else '',
+                'url': pre_interface.url if pre_interface else ''
+            },
+            'post_interface_id': dep.post_interface_id,
+            'post_interface': {
+                'name': post_interface.interface_name if post_interface else '未知接口',
+                'method': post_interface.method.name if (post_interface and post_interface.method) else '',
+                'url': post_interface.url if post_interface else ''
+            },
+            'param_pass_rule': dep.param_pass_rule,
+            'dep_type': dep.dep_type,
+            'create_time': dep.create_time.strftime('%Y-%m-%d %H:%M:%S') if dep.create_time else ''
+        }
+    })
+
+
+
+
+
+

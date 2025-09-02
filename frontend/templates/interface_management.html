@@ -177,8 +177,7 @@ function renderInterfaceDetail(iface) {
             <th style="width: 8em;">参数名</th>
             <th style="width: 8em;">数据类型</th>
             <th style="width: 8em;">是否必填</th>
-            <th style="width: 20em;">示例值</th>
-            <th style="width: 8em;">约束</th>
+            <th style="width: 28em;">示例值</th>
           </tr>
         </thead>
         <tbody>
@@ -188,7 +187,6 @@ function renderInterfaceDetail(iface) {
             <td>${param.data_type}</td>
             <td>${param.is_required ? "是" : "否"}</td>
             <td>${param.example_value}</td>
-            <td>${param.constraint ? param.constraint : '请设置约束值'}</td>
           </tr>
           `).join("")}
         </tbody>
@@ -206,8 +204,7 @@ function renderInterfaceDetail(iface) {
             <th style="width: 8em;">参数名</th>
             <th style="width: 8em;">数据类型</th>
             <th style="width: 8em;">是否必填</th>
-            <th style="width: 20em;">示例值</th>
-            <th style="width: 8em;">约束</th>
+            <th style="width: 28em;">示例值</th>
           </tr>
         </thead>
         <tbody>
@@ -217,7 +214,6 @@ function renderInterfaceDetail(iface) {
             <td>${param.data_type}</td>
             <td>${param.is_required ? "是" : "否"}</td>
             <td>${param.example_value}</td>
-            <td>${param.constraint ? param.constraint : '请设置约束值'}</td>
           </tr>
           `).join("")}
         </tbody>
@@ -270,6 +266,9 @@ function renderInterfaceDetail(iface) {
         <div class="mb-4 d-flex gap-2">
           <button class="btn btn-sm btn-primary" onclick="openEditPage(${iface.interface_id})">编辑接口</button>
           <button class="btn btn-sm btn-success" onclick="testInterface(${iface.interface_id})">测试接口</button>
+          <button class="btn btn-sm btn-secondary" onclick="openDependencyConfig(${iface.interface_id})">
+             依赖配置
+          </button>
           <button class="btn btn-sm btn-danger" onclick="deleteInterface(${iface.interface_id})">删除接口</button>
         </div>
         <div class="mb-3">
@@ -315,6 +314,12 @@ function deleteInterface(interfaceId) {
       }
     });
   }
+}
+// 打开依赖配置页面
+function openDependencyConfig(interfaceId) {
+  window.open(`/interface/dependency/config?interface_id=${interfaceId}`,
+              '接口依赖配置',
+              'width=1000,height=700,top=100,left=200');
 }
 // 为更新项目按钮绑定点击事件
 $(document).on('click', '.update-project', function () {

@@ -18,7 +18,7 @@
                 <input type="text" class="form-control" id="interfaceName" value="{{ interface.name }}">
               </div>
               <div class="col-md-4 mb-3">
-                <label for="interfaceUrl" class="form-label">请求 URL</label>
+                <label for="interfaceUrl" class="form-label">请求URL</label>
                 <input type="text" class="form-control" id="interfaceUrl" value="{{ interface.url }}">
               </div>
               <div class="col-md-4 mb-3">
@@ -47,7 +47,6 @@
                   <th style="width: 8em;">数据类型</th>
                   <th style="width: 8em;">是否必填</th>
                   <th style="width: 20em;">示例值</th>
-                  <th style="width: 8em;">约束</th>
                   <th style="width: 6em;">操作</th>
                 </tr>
               </thead>
@@ -63,7 +62,6 @@
                     </select>
                   </td>
                   <td><input type="text" class="form-control" name="exampleValue" value="{{ param.example_value }}"></td>
-                  <td><input type="text" class="form-control" name="constraint" value="{{ param.constraint or '' }}"></td>
                   <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'header')">删除</button></td>
                 </tr>
                 {% endfor %}
@@ -85,7 +83,6 @@
                   <th style="width: 8em;">数据类型</th>
                   <th style="width: 8em;">是否必填</th>
                   <th style="width: 20em;">示例值</th>
-                  <th style="width: 8em;">约束</th>
                   <th style="width: 6em;">操作</th>
                 </tr>
               </thead>
@@ -101,7 +98,6 @@
                     </select>
                   </td>
                   <td><input type="text" class="form-control" name="exampleValue" value="{{ param.example_value }}"></td>
-                  <td><input type="text" class="form-control" name="constraint" value="{{ param.constraint or '' }}"></td>
                   <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'request')">删除</button></td>
                 </tr>
                 {% endfor %}
@@ -171,7 +167,6 @@ function addHeaderParam() {
         </select>
       </td>
       <td><input type="text" class="form-control" name="exampleValue"></td>
-      <td><input type="text" class="form-control" name="constraint"></td>
       <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'header')">删除</button></td>
     </tr>
   `);
@@ -190,7 +185,6 @@ function addRequestParam() {
         </select>
       </td>
       <td><input type="text" class="form-control" name="exampleValue"></td>
-      <td><input type="text" class="form-control" name="constraint"></td>
       <td><button class="btn btn-sm btn-danger" onclick="deleteParam(this, 'request')">删除</button></td>
     </tr>
   `);
@@ -236,14 +230,13 @@ function saveInterface() {
     const dataType = $(this).find('input[name="dataType"]').val();
     const isRequired = $(this).find('select[name="isRequired"]').val() === 'true';
     const exampleValue = $(this).find('input[name="exampleValue"]').val();
-    const constraint = $(this).find('input[name="constraint"]').val();
+    // 移除约束相关收集逻辑
     interfaceData.header_params.push({
       param_id: paramId,
       param_name: paramName,
       data_type: dataType,
       is_required: isRequired,
-      example_value: exampleValue,
-      constraint: constraint
+      example_value: exampleValue
     });
   });
   // 收集请求参数
@@ -253,14 +246,13 @@ function saveInterface() {
     const dataType = $(this).find('input[name="dataType"]').val();
     const isRequired = $(this).find('select[name="isRequired"]').val() === 'true';
     const exampleValue = $(this).find('input[name="exampleValue"]').val();
-    const constraint = $(this).find('input[name="constraint"]').val();
+    // 移除约束相关收集逻辑
     interfaceData.request_params.push({
       param_id: paramId,
       param_name: paramName,
       data_type: dataType,
       is_required: isRequired,
-      example_value: exampleValue,
-      constraint: constraint
+      example_value: exampleValue
     });
   });
   // 收集响应参数

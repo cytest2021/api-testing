@@ -77,20 +77,69 @@ document.addEventListener('DOMContentLoaded', function () {
     console.error('关键DOM元素缺失');
     return;
   }
+  // ===================== 修改：判定规则中英文映射表 =====================
+  const assertRuleMap = {
+      'status: true': '校验响应状态码',
+       'code: true': '校验业务码（code字段）',
+       'body: true': '校验完整响应体',
+       // 修改：明确“校验响应体指定参数”的展示格式
+       'body_param: true': '校验响应体指定参数：{param_name}'
+    };
+// ===================== 修改：规则解析函数（关键逻辑） =====================
+    const parseAssertRule = (ruleStr) => {
+        if (!ruleStr || ruleStr === '无' || ruleStr === '-') return '无';
+        try {
+            const ruleObj = JSON.parse(ruleStr);
+            let chineseRules = [];
+
+            // 1. 遍历规则，仅保留“校验项”（value为true的规则），过滤“不校验项”（value为false）
+            for (const [key, value] of Object.entries(ruleObj)) {
+                // 跳过“不校验”的规则（value为false）和冗余的body_param_path字段
+                if (value === false || key === 'body_param_path') {
+                    continue;
+                }
+
+                const ruleKey = `${key}: ${value}`;
+                let mappedRule = assertRuleMap[ruleKey];
+
+                // 2. 处理“校验响应体指定参数”：合并参数名，不单独展示body_param_path
+                if (key === 'body_param' && value === true) {
+                    // 从规则对象中获取用户填写的参数名（body_param_path存储参数名）
+                    const paramName = ruleObj.body_param_path || '未填写';
+                    mappedRule = `校验响应体指定参数：${paramName}`; // 直接拼接参数名，不冗余展示
+                }
+
+                // 将处理后的规则加入列表（无映射时保留原始规则）
+                if (mappedRule) {
+                    chineseRules.push(mappedRule);
+                } else if (value === true) {
+                    // 兼容未配置映射的校验项（仅保留true的规则）
+                    chineseRules.push(`${key}（校验）`);
+                }
+            }
+
+            // 若没有需要展示的规则，返回“无”
+            return chineseRules.length > 0 ? chineseRules.join('<br>') : '无';
+        } catch (error) {
+            console.warn('判定规则解析失败（非JSON）:', error, '原始规则:', ruleStr);
+            return ruleStr;
+        }
+    };
+
   // 格式化参数显示（转换为"参数:参数值"格式）
   const formatParams = (paramsStr) => {
-    if (!paramsStr || paramsStr === '无') return paramsStr;
-    try {
-      const params = JSON.parse(paramsStr);
-      const paramPairs = [];
-      for (const [key, value] of Object.entries(params)) {
-        paramPairs.push(`${key}: ${value}`);
+      if (!paramsStr || paramsStr === '无') return paramsStr;
+      try {
+          const params = JSON.parse(paramsStr);
+          const paramPairs = [];
+          for (const [key, value] of Object.entries(params)) {
+              paramPairs.push(`${key}: ${value}`);
+          }
+          return paramPairs.join('; ');
+      } catch (error) {
+          // 如果解析失败，返回原始字符串
+          return paramsStr;
       }
-      return paramPairs.join('; ');
-    } catch (error) {
-      // 如果解析失败，返回原始字符串
-      return paramsStr;
-    }
   };
   // 加载项目列表
   const loadProjects = () => {
@@ -431,7 +480,8 @@ window.copyCase = function (btn) {
     });
   };
 
-// 渲染测试用例列表（修改：仅展示假ID，真实ID仍用于功能操作）
+// 渲染测试用例列表（修改：确保判定规则正确展示）
+// 渲染测试用例列表（修改：修正请求头/请求参数字段名）
 function renderTestCases(cases) {
     const tbody = document.getElementById('caseTbody');
     tbody.innerHTML = '';
@@ -440,23 +490,20 @@ function renderTestCases(cases) {
         return;
     }
     document.getElementById('noCasePrompt').style.display = 'none';
-
     cases.forEach((caseItem, index) => {
         const fakeId = index + 1;
         const row = document.createElement('tr');
         row.innerHTML = `
-            <!-- 新增行勾选框 -->
-            <td>
-              <input type="checkbox" class="caseCheckbox" data-case-id="${caseItem.case_id}">
-            </td>
+            <td><input type="checkbox" class="caseCheckbox" data-case-id="${caseItem.case_id}"></td>
             <td>${fakeId}</td>
             <td>${caseItem.case_name || '-'}</td>
+            <!-- 关键修改：将 request_header_params 改为 request_header -->
             <td>${formatParams(caseItem.request_header) || '-'}</td>
+            <!-- 关键修改：将 request_params 改为 request_param -->
             <td>${formatParams(caseItem.request_param) || '-'}</td>
             <td>${formatParams(caseItem.expected_result) || '-'}</td>
-            <td>${caseItem.assert_rule || '-'}</td>
+            <td>${parseAssertRule(caseItem.assert_rule) || '-'}</td>
             <td>
-                <!-- 确保编辑、复制、删除按钮都有data-case-id属性 -->
                 <button class="btn btn-sm btn-warning" data-case-id="${caseItem.case_id}" onclick="editCase(this)">编辑</button>
                 <button class="btn btn-sm btn-secondary" data-case-id="${caseItem.case_id}" onclick="copyCase(this)">复制</button>
                 <button class="btn btn-sm btn-danger" data-case-id="${caseItem.case_id}" onclick="deleteCase(this)">删除</button>
@@ -464,7 +511,7 @@ function renderTestCases(cases) {
         `;
         tbody.appendChild(row);
     });
-  }
+}
 
   // 初始化加载项目
   loadProjects();
@@ -543,8 +590,12 @@ function renderTestCases(cases) {
   #caseTable th:nth-child(6), #caseTable td:nth-child(6) {
     width: 6em;
   }
+  /* ===================== 新增：判定规则列允许换行 ===================== */
   #caseTable th:nth-child(7), #caseTable td:nth-child(7) {
     min-width: 16em;
+    white-space: normal !important; /* 允许换行 */
+    word-break: break-all; /* 长文本自动换行 */
+    vertical-align: middle;
   }
 </style>
 {% endblock %}

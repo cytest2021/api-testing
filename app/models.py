@@ -224,6 +224,28 @@ class TestCase(db.Model):
         except json.JSONDecodeError:
             return {}  # 解析失败时返回空字典，避免抛出异常
 
+
+# 接口依赖表
+class InterfaceDependency(db.Model):
+    __tablename__ = 'dependency_interface'
+    dependency_id = db.Column(db.Integer, primary_key=True, autoincrement=True)  # 依赖ID（主键）
+    pre_interface_id = db.Column(db.Integer, nullable=False)  # 前置接口ID
+    post_interface_id = db.Column(db.Integer, nullable=False)  # 后置接口ID
+    param_pass_rule = db.Column(db.String(200), nullable=False)  # 参数传递规则（JSON格式存储）
+    # 扩展字段：补充依赖类型、创建时间等
+    dep_type = db.Column(db.String(20), default='normal')  # 依赖类型（normal：普通依赖，auth：认证依赖）
+    create_time = db.Column(db.DateTime, default=datetime.now)  # 创建时间
+
+    # 关联查询：通过前置接口ID查询所有后置依赖
+    @staticmethod
+    def get_deps_by_pre(pre_id):
+        return InterfaceDependency.query.filter_by(pre_interface_id=pre_id).all()
+
+    # 关联查询：通过后置接口ID查询所有前置依赖
+    @staticmethod
+    def get_deps_by_post(post_id):
+        return InterfaceDependency.query.filter_by(post_interface_id=post_id).all()
+
 # 6. 测试结果表（记录用例执行结果）
 class TestResult(db.Model):
     __tablename__ = 'test_result'

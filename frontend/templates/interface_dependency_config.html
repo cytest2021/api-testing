@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script type="module">
+        // 具名导入 JSONPath
+        import { JSONPath } from '/static/js/index-browser-esm.min.js';
+        window.JSONPath = JSONPath;
+    </script>
+    <title>接口依赖配置</title>
+    <!-- 引入Bootstrap样式（修复模态框和表单样式依赖） -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+       .container-fluid {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+       .page-header {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e9ecef;
+        }
+       .page-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+        }
+       .page-title i {
+            margin-right: 0.5rem;
+            color: #3498db;
+        }
+       .card {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+       .card-header {
+            background-color: #fff;
+            border-bottom: 1px solid #f1f3f5;
+            padding: 1rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+       .card-header h5 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0;
+            color: #2c3e50;
+        }
+       .card-body {
+            padding: 1.25rem;
+        }
+       .dependency-card {
+            transition: all 0.3s ease;
+            border: 1px solid #e9ecef;
+            height: 100%;
+        }
+       .dependency-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+            border-color: #dce1e8;
+        }
+       .dependency-card.card-body {
+            padding: 1rem;
+        }
+       .dependency-card.card-title {
+            font-size: 1rem;
+            color: #2c3e50;
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+        }
+       .rule-item {
+            background-color: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            border: 1px solid #e9ecef;
+        }
+       .rule-item div {
+            margin-bottom: 5px;
+        }
+       .rule-item div:last-child {
+            margin-bottom: 0;
+        }
+       .rule-item strong {
+            color: #2c3e50;
+            width: 80px;
+            display: inline-block;
+        }
+       .badge {
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+        }
+       .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: #6c757d;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+       .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: #adb5bd;
+        }
+       .empty-state p {
+            margin-bottom: 1.5rem;
+            font-size: 1rem;
+        }
+        /* 修复模态框样式，确保居中且不被遮挡 */
+       .modal {
+            display: none; /* 默认隐藏，通过JS控制显示 */
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(2px);
+        }
+       .modal-dialog.modal-lg {
+            max-width: 900px;
+            width: 90%;
+            margin: 0;
+        }
+       .modal-content {
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            border: none;
+        }
+       .modal-header {
+            border-bottom: 1px solid #e9ecef;
+            padding: 1rem 1.5rem;
+            background-color: #fafbfc;
+        }
+       .modal-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+       .modal-body {
+            padding: 1.5rem;
+            background-color: #fff;
+        }
+       .modal-footer {
+            border-top: 1px solid #e9ecef;
+            padding: 1rem 1.5rem;
+            background-color: #fafbfc;
+        }
+        /* 优化表单样式，统一间距和视觉效果 */
+       .form-group {
+            margin-bottom: 1.25rem;
+        }
+       .form-label {
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: #495057;
+            display: block;
+        }
+       .form-select,
+       .form-control {
+            border-radius: 6px;
+            border: 1px solid #ced4da;
+            padding: 0.6rem 0.75rem;
+            font-size: 0.95rem;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            width: 100%;
+        }
+       .form-select:focus,
+       .form-control:focus {
+            border-color: #80bdff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+            outline: none;
+        }
+       .input-group {
+            width: 100%;
+        }
+       .input-group .form-control {
+            border-right: none;
+            border-radius: 6px 0 0 6px;
+        }
+       .input-group .btn-outline-secondary {
+            border-left: none;
+            border-radius: 0 6px 6px 0;
+        }
+        /* 错误提示样式优化 */
+       .text-danger {
+            color: #dc3545 !important;
+            font-size: 0.875rem;
+            margin-top: 0.25rem;
+            display: block;
+        }
+       .text-success {
+            color: #28a745 !important;
+        }
+       .text-warning {
+            color: #ffc107 !important;
+        }
+       .text-muted {
+            color: #6c757d !important;
+            font-size: 0.875rem;
+        }
+        /* 按钮样式优化，增强交互反馈 */
+       .btn {
+            border-radius: 6px;
+            padding: 0.4rem 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border: none;
+        }
+       .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.85rem;
+        }
+       .btn-primary {
+            background-color: #007bff;
+        }
+       .btn-primary:hover {
+            background-color: #0069d9;
+        }
+       .btn-success {
+            background-color: #28a745;
+        }
+       .btn-success:hover {
+            background-color: #218838;
+        }
+       .btn-warning {
+            background-color: #ffc107;
+            color: #212529;
+        }
+       .btn-warning:hover {
+            background-color: #e0a800;
+        }
+       .btn-danger {
+            background-color: #dc3545;
+        }
+       .btn-danger:hover {
+            background-color: #c82333;
+        }
+       .btn-secondary {
+            background-color: #6c757d;
+        }
+       .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+       .btn-outline-secondary {
+            border-color: #ced4da;
+            color: #6c757d;
+        }
+       .btn-outline-secondary:hover {
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+        }
+        /* 间距工具类补充 */
+       .mt-1 { margin-top: 0.25rem !important; }
+       .mt-2 { margin-top: 0.5rem !important; }
+       .mt-3 { margin-top: 1rem !important; }
+       .mb-1 { margin-bottom: 0.25rem !important; }
+       .mb-2 { margin-bottom: 0.5rem !important; }
+       .mb-3 { margin-bottom: 1rem !important; }
+       .mb-4 { margin-bottom: 1.5rem !important; }
+       .me-1 { margin-right: 0.25rem !important; }
+       .me-2 { margin-right: 0.5rem !important; }
+        pre {
+            margin: 0;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+        }
+       .spinner-border {
+            width: 1rem;
+            height: 1rem;
+            margin-right: 0.5rem;
+        }
+        /* 响应式适配 */
+        @media (max-width: 768px) {
+           .modal-dialog.modal-lg {
+                max-width: 95%;
+            }
+           .row > [class^="col-"] {
+                margin-bottom: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid p-4">
+        <div class="page-header d-flex justify-content-between align-items-center">
+            <h4 class="page-title">
+                <i class="bi bi-link-45deg"></i>接口依赖配置
+            </h4>
+            <button class="btn btn-secondary" onclick="window.close()">关闭</button>
+        </div>
+
+        <!-- 前置依赖接口区域 -->
+        <div class="card">
+            <div class="card-header">
+                <h5>前置依赖接口（当前接口作为后置接口）</h5>
+                <!-- 添加前置依赖按钮：点击触发模态框显示 -->
+                <button class="btn btn-sm btn-success" onclick="openAddDependencyModal()">
+                    <i class="bi bi-plus-circle me-1"></i> 添加前置依赖
+                </button>
+            </div>
+            <div class="card-body">
+                {% if dependencies and dependencies|length > 0 %}
+                    <div class="row">
+                        {% for dep in dependencies %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card dependency-card">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-3">
+                                            <h6 class="card-title mb-0">{{ dep.pre_interface.name }}</h6>
+                                            <div>
+                                                <button class="btn btn-sm btn-warning me-1" onclick="openEditDependencyModal({{ dep.dependency_id }})">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-sm btn-danger" onclick="deleteDependency({{ dep.dependency_id }})">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <p class="card-text small mb-3">
+                                            <strong>ID：</strong>{{ dep.pre_interface.interface_id }}&nbsp;&nbsp;
+                                            <strong>方法：</strong><span class="badge bg-secondary">{{ dep.pre_interface.method.name }}</span>&nbsp;&nbsp;
+                                            <strong>URL：</strong>{{ dep.pre_interface.url }}
+                                        </p>
+                                        <div>
+                                            <div class="small text-muted mb-1">参数传递规则：</div>
+                                            {% set rule = dep.param_pass_rule|fromjson %}
+                                            <div class="rule-item">
+                                                <div><strong>提取方式：</strong>{{ 'JSONPath' if rule.extract_type == 'jsonpath' else 'XPath' }}</div>
+                                                <div><strong>提取规则：</strong>{{ rule.extract_rule }}</div>
+                                                <div><strong>目标位置：</strong>{{
+                                                    '请求头' if rule.target_param_type == 'header' else
+                                                    '路径参数' if rule.target_param_type == 'path' else
+                                                    '查询参数' if rule.target_param_type == 'query' else '请求体'
+                                                }}</div>
+                                                <div><strong>目标参数：</strong>{{ rule.target_param_name }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <i class="bi bi-link-45deg"></i>
+                        <p>当前接口暂无前置依赖</p>
+                        <button class="btn btn-sm btn-success" onclick="openAddDependencyModal()">
+                            <i class="bi bi-plus-circle me-1"></i> 添加前置依赖
+                        </button>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- 被依赖接口区域（按需求保留） -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">被依赖接口（当前接口作为前置接口）</h5>
+            </div>
+            <div class="card-body">
+                {% if dependent_interfaces and dependent_interfaces|length > 0 %}
+                    <div class="list-group">
+                        {% for dep in dependent_interfaces %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>{{ dep.post_interface.name }}</strong>
+                                        <p class="mb-0 small">
+                                            <strong>ID：</strong>{{ dep.post_interface.interface_id }}&nbsp;&nbsp;
+                                            <strong>方法：</strong><span class="badge bg-secondary">{{ dep.post_interface.method.name }}</span>&nbsp;&nbsp;
+                                            <strong>URL：</strong>{{ dep.post_interface.url }}
+                                        </p>
+                                    </div>
+                                    <button class="btn btn-sm btn-info" onclick="viewDependencyDetail({{ dep.dependency_id }})">
+                                        查看规则
+                                    </button>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="empty-state">
+                        <p>当前接口未被任何接口依赖</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑依赖模态框：默认隐藏，通过JS控制显示 -->
+    <div class="modal fade" id="dependencyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dependencyModalTitle">添加前置依赖</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="currentInterfaceId" value="{{ current_interface.interface_id }}">
+                    <input type="hidden" id="editDependencyId" value="">
+
+                    <div class="row g-3">
+                        <!-- 前置接口选择 -->
+                        <div class="form-group">
+                            <label class="form-label">选择前置接口 <span class="text-danger">*</span></label>
+                            <select class="form-select" id="preInterfaceSelect" required>
+                                <option value="">-- 请选择前置接口 --</option>
+                                {% for interface in all_interfaces %}
+                                    {% if interface.interface_id != current_interface.interface_id %}
+                                        <option value="{{ interface.interface_id }}">
+                                            {{ interface.name }}（{{ interface.method.name }} {{ interface.url }}）
+                                        </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- 提取规则配置 -->
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">提取方式 <span class="text-danger">*</span></label>
+                                <select class="form-select" id="extractTypeSelect" required>
+                                    <option value="jsonpath">JSONPath（推荐）</option>
+                                    <option value="xpath">XPath</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">前置接口响应提取规则 <span class="text-danger">*</span></label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="extractRuleInput"
+                                           placeholder="例如：$.data.token" required>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="previewExtractResult()">
+                                        预览
+                                    </button>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    JSONPath示例：$.data.token<br>
+                                    XPath示例：//data/token
+                                </small>
+                                <!-- 提取预览结果 -->
+                                <div class="mt-2 p-2 bg-light rounded" id="extractPreview" style="font-size: 0.85rem; max-height: 100px; overflow-y: auto;">
+                                    请输入提取规则并点击预览
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 目标参数配置 -->
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">目标参数位置 <span class="text-danger">*</span></label>
+                                <select class="form-select" id="targetParamTypeSelect" onchange="loadTargetParameters(this.value)" required>
+                                    <option value="header">请求头参数</option>
+                                    <option value="path">路径参数</option>
+                                    <option value="query">查询参数</option>
+                                    <option value="body">请求体参数</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="form-label">目标参数 <span class="text-danger">*</span></label>
+                                <select class="form-select" id="targetParamSelect" required>
+                                    <option value="">-- 请选择目标参数 --</option>
+                                    <!-- 动态加载参数 -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- 依赖类型 -->
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label class="form-label">依赖类型</label>
+                                <select class="form-select" id="dependencyTypeSelect">
+                                    <option value="normal">普通依赖</option>
+                                    <option value="auth">认证依赖</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" onclick="saveDependency()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 依赖详情模态框 -->
+    <div class="modal fade" id="dependencyDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-md">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">依赖规则详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="dependencyDetailContent">
+                    <!-- 动态填充依赖详情 -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xpath.js/2.0.2/xpath.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.2/purify.min.js"></script>
+    <script>
+        // 初始化Bootstrap模态框实例
+        const dependencyModal = new bootstrap.Modal(document.getElementById('dependencyModal'));
+        const detailModal = new bootstrap.Modal(document.getElementById('dependencyDetailModal'));
+
+        // 页面加载完成后初始化
+        $(document).ready(function () {
+            // 加载目标参数
+            loadTargetParameters();
+        });
+
+        // 打开添加依赖模态框
+        function openAddDependencyModal() {
+            $('#dependencyModalTitle').text('添加前置依赖');
+            $('#editDependencyId').val('');
+            $('#preInterfaceSelect').val('');
+            $('#extractRuleInput').val('');
+            $('#extractPreview').text('请输入提取规则并点击预览');
+            $('#dependencyTypeSelect').val('normal');
+            loadTargetParameters('header');
+            dependencyModal.show(); // 显示模态框
+        }
+
+        // 打开编辑依赖模态框
+        function openEditDependencyModal(dependencyId) {
+            // 从后端获取依赖详情
+            $.get(`/api/dependency/${dependencyId}`, function (response) {
+                if (response.code === 200) {
+                    const dep = response.data;
+                    const rule = JSON.parse(dep.param_pass_rule);
+                    $('#dependencyModalTitle').text('编辑前置依赖');
+                    $('#editDependencyId').val(dep.dependency_id);
+                    $('#preInterfaceSelect').val(dep.pre_interface_id);
+                    $('#extractTypeSelect').val(rule.extract_type);
+                    $('#extractRuleInput').val(rule.extract_rule);
+                    $('#targetParamTypeSelect').val(rule.target_param_type);
+                    $('#dependencyTypeSelect').val(dep.dep_type || 'normal');
+                    // 加载并选中目标参数
+                    loadTargetParameters(rule.target_param_type, rule.target_param_name);
+                    // 预览提取结果
+                    previewExtractResult();
+                    dependencyModal.show(); // 显示模态框
+                } else {
+                    alert('获取依赖信息失败：' + response.msg);
+                }
+            }).fail(function () {
+                alert('获取依赖信息失败');
+            });
+        }
+
+        // 加载目标参数列表
+        function loadTargetParameters(targetType = 'header', selectedParam = '') {
+            const interfaceId = $('#currentInterfaceId').val();
+            const targetParamSelect = $('#targetParamSelect');
+            targetParamSelect.empty().append('<option value="">-- 请选择目标参数 --</option>');
+            // 从后端获取当前接口的参数信息
+            $.get(`/api/interface/${interfaceId}/parameters?type=${targetType}`, function (response) {
+                if (response.code === 200 && response.data && response.data.length > 0) {
+                    response.data.forEach(param => {
+                        const selected = selectedParam === param.param_name? 'selected' : '';
+                        targetParamSelect.append(`
+                            <option value="${param.param_name}" ${selected}>
+                                ${param.param_name}（${param.data_type}）
+                            </option>
+                        `);
+                    });
+                } else {
+                    targetParamSelect.append('<option value="">该位置暂无参数，请先在接口编辑中添加</option>');
+                }
+            }).fail(function () {
+                targetParamSelect.append('<option value="">获取参数失败</option>');
+            });
+        }
+
+        // 预览提取结果
+        function previewExtractResult() {
+            const preInterfaceId = $('#preInterfaceSelect').val();
+            const extractType = $('#extractTypeSelect').val();
+            const extractRule = $('#extractRuleInput').val();
+            const previewEl = $('#extractPreview');
+            if (!preInterfaceId ||!extractRule) {
+                previewEl.html('<span class="text-danger">请选择前置接口并输入提取规则</span>');
+                return;
+            }
+            // 获取前置接口的响应示例
+            $.get(`/api/interface/${preInterfaceId}/response-example`, function (response) {
+                if (response.code === 200 && response.data) {
+                    try {
+                        const responseData = JSON.parse(response.data);
+                        let result;
+                        if (extractType === 'jsonpath') {
+                            // 打印数据结构用于调试
+                            console.log('JSON数据结构:', responseData);
+                            // 使用 JSONPath 函数提取数据（直接调用，传入 path 和 json 参数）
+                            result = window.JSONPath({
+                                path: extractRule,
+                                json: responseData
+                            });
+                            // 处理提取结果（如果是数组且只有一个元素，直接显示元素值）
+                            if (Array.isArray(result) && result.length === 1) {
+                                result = result[0];
+                            }
+                        } else if (extractType === 'xpath') {
+                            // 这里是 XPath 提取逻辑（如果需要支持 XML 响应）
+                            // 示例：假设 responseData 是 XML 格式字符串
+                            const DOMPurify = window.DOMPurify; // 确保已引入 DOMPurify
+                            const clean = DOMPurify.sanitize(responseData);
+                            const parser = new DOMParser();
+                            const xmlDoc = parser.parseFromString(clean, "application/xml");
+                            const xpathResult = xmlDoc.evaluate(extractRule, xmlDoc, null, XPathResult.ANY_TYPE, null);
+                            let xpathValue;
+                            let item = xpathResult.iterateNext();
+                            if (item) {
+                                xpathValue = item.textContent;
+                            } else {
+                                xpathValue = '未找到匹配的 XPath 结果';
+                            }
+                            result = xpathValue;
+                        }
+                        if (result) {
+                            previewEl.html(`
+                                <div class="text-success"><strong>提取成功：</strong></div>
+                                <pre>${JSON.stringify(result, null, 2)}</pre>
+                            `);
+                        } else {
+                            previewEl.html(`
+                                <div class="text-danger"><strong>提取失败：</strong>未找到匹配结果</div>
+                            `);
+                        }
+                    } catch (e) {
+                        previewEl.html(`
+                            <div class="text-danger"><strong>提取失败：</strong>${e.message}</div>
+                        `);
+                    }
+                } else {
+                    previewEl.html('<div class="text-warning">前置接口暂无响应示例，无法预览</div>');
+                }
+            }).fail(function () {
+                previewEl.html('<div class="text-danger">获取响应示例失败</div>');
+            });
+        }
+        // 保存依赖配置
+        function saveDependency() {
+            const dependencyId = $('#editDependencyId').val();
+            const postInterfaceId = $('#currentInterfaceId').val();
+            const preInterfaceId = $('#preInterfaceSelect').val();
+            const extractType = $('#extractTypeSelect').val();
+            const extractRule = $('#extractRuleInput').val();
+            const targetParamType = $('#targetParamTypeSelect').val();
+            const targetParamName = $('#targetParamSelect').val();
+            const depType = $('#dependencyTypeSelect').val();
+            // 表单验证
+            if (!preInterfaceId) {
+                alert('请选择前置接口');
+                return;
+            }
+            if (!extractRule) {
+                alert('请输入提取规则');
+                return;
+            }
+            if (!targetParamName) {
+                alert('请选择目标参数');
+                return;
+            }
+            // 构建参数传递规则
+            const paramPassRule = JSON.stringify({
+                extract_type: extractType,
+                extract_rule: extractRule,
+                target_param_type: targetParamType,
+                target_param_name: targetParamName
+            });
+            // 构建请求数据
+            const data = {
+                dependency_id: dependencyId,
+                pre_interface_id: preInterfaceId,
+                post_interface_id: postInterfaceId,
+                param_pass_rule: paramPassRule,
+                dep_type: depType
+            };
+            // 禁用保存按钮防止重复提交
+            const saveBtn = $('#dependencyModal .modal-footer .btn-primary');
+            const originalText = saveBtn.html();
+            saveBtn.html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 保存中...').prop('disabled', true);
+            // 发送保存请求
+            $.ajax({
+                url: '/api/dependency/save',
+                type: 'POST',
+                data: { data: JSON.stringify(data) },
+                success: function(response) {
+                    if (response.code === 200) {
+                        alert(dependencyId ? '依赖更新成功' : '依赖添加成功');
+                        dependencyModal.hide(); // 隐藏模态框
+                        // 刷新页面加载最新依赖数据
+                        window.location.reload();
+                    } else {
+                        alert('保存失败：' + (response.msg || '未知错误'));
+                        saveBtn.html(originalText).prop('disabled', false);
+                    }
+                },
+                error: function() {
+                    alert('保存请求失败，请检查后端接口是否正常');
+                    saveBtn.html(originalText).prop('disabled', false);
+                }
+            });
+        }
+
+        // 删除依赖
+        function deleteDependency(dependencyId) {
+            if (confirm('确定要删除这个依赖关系吗？此操作不可恢复。')) {
+                // 显示加载状态，避免重复点击
+                const deleteBtn = $(`button[onclick="deleteDependency(${dependencyId})"]`);
+                const card = deleteBtn.closest('.dependency-card');
+                card.css('opacity', '0.6');
+                deleteBtn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>');
+
+                $.ajax({
+                    url: `/api/dependency/${dependencyId}`,
+                    type: 'DELETE',
+                    success: function(response) {
+                        if (response.code === 200) {
+                            alert('依赖删除成功');
+                            // 刷新页面更新依赖列表
+                            window.location.reload();
+                        } else {
+                            alert('删除失败：' + (response.msg || '未知错误'));
+                            // 恢复按钮状态
+                            card.css('opacity', '1');
+                            deleteBtn.prop('disabled', false).html('<i class="bi bi-trash"></i>');
+                        }
+                    },
+                    error: function() {
+                        alert('删除请求失败，请检查后端接口是否正常');
+                        // 恢复按钮状态
+                        card.css('opacity', '1');
+                        deleteBtn.prop('disabled', false).html('<i class="bi bi-trash"></i>');
+                    }
+                });
+            }
+        }
+
+        // 查看依赖详情
+        function viewDependencyDetail(dependencyId) {
+            $.get(`/api/dependency/${dependencyId}`, function(response) {
+                if (response.code === 200) {
+                    const dep = response.data;
+                    const rule = JSON.parse(dep.param_pass_rule);
+                    let detailHtml = `
+                        <div class="mb-2">
+                            <strong>前置接口：</strong>
+                            <span>${dep.pre_interface.name}（${dep.pre_interface.method} ${dep.pre_interface.url}）</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>依赖类型：</strong>
+                            <span>${dep.dep_type === 'auth' ? '认证依赖' : '普通依赖'}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>提取方式：</strong>
+                            <span>${rule.extract_type === 'jsonpath' ? 'JSONPath' : 'XPath'}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>提取规则：</strong>
+                            <span>${rule.extract_rule}</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>目标位置：</strong>
+                            <span>${
+                                rule.target_param_type === 'header' ? '请求头' :
+                                rule.target_param_type === 'path' ? '路径参数' :
+                                rule.target_param_type === 'query' ? '查询参数' : '请求体'
+                            }</span>
+                        </div>
+                        <div class="mb-2">
+                            <strong>目标参数：</strong>
+                            <span>${rule.target_param_name}</span>
+                        </div>
+                    `;
+                    $('#dependencyDetailContent').html(detailHtml);
+                    detailModal.show(); // 显示详情模态框
+                } else {
+                    alert('获取依赖详情失败：' + response.msg);
+                }
+            }).fail(function() {
+                alert('获取依赖详情请求失败');
+            });
+        }
+    </script>
+</body>
+</html>
