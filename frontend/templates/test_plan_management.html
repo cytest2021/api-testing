@@ -1,0 +1,239 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>测试计划管理</h3>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPlanModal">
+            <i class="bi bi-plus-circle"></i> 新建计划
+        </button>
+    </div>
+
+    <!-- 计划列表 -->
+    <div class="card">
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>计划ID</th>
+                        <th>计划名称</th>
+                        <th>所属项目</th>
+                        <th>执行环境</th>
+                        <th>执行方式</th>
+                        <th>状态</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="planTableBody">
+                    <!-- 计划数据将动态加载 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 创建计划模态框 -->
+<div class="modal fade" id="createPlanModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">创建测试计划</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createPlanForm">
+                    <div class="mb-3">
+                        <label class="form-label">计划名称</label>
+                        <input type="text" class="form-control" name="plan_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">所属项目</label>
+                        <select class="form-select" name="project_id" id="projectSelect" required>
+                            <!-- 项目选项将动态加载 -->
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">执行环境URL</label>
+                        <input type="text" class="form-control" name="env_url" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">执行方式</label>
+                        <select class="form-select" name="execute_type" id="executeTypeSelect" required>
+                            <option value="batch">批量执行</option>
+                            <option value="single">单条执行</option>
+                            <option value="timing">定时执行</option>
+                        </select>
+                    </div>
+                    <div class="mb-3" id="cronExpressionGroup" style="display: none;">
+                        <label class="form-label">Cron表达式</label>
+                        <input type="text" class="form-control" name="cron_expression" 
+                               placeholder="例如：0 0 * * * 表示每天凌晨执行">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">选择测试用例</label>
+                        <div id="caseSelectionContainer" style="max-height: 200px; overflow-y: auto;">
+                            <!-- 用例复选框将动态加载 -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitPlanForm()">创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadProjects();
+    loadPlans();
+    
+    // 执行方式切换显示Cron表达式
+    document.getElementById('executeTypeSelect').addEventListener('change', function() {
+        const cronGroup = document.getElementById('cronExpressionGroup');
+        cronGroup.style.display = this.value === 'timing'? 'block' : 'none';
+    });
+});
+
+// 加载项目列表
+function loadProjects() {
+    fetch('/api/all-projects')
+       .then(res => res.json())
+       .then(data => {
+            const select = document.getElementById('projectSelect');
+            data.data.forEach(project => {
+                select.innerHTML += `<option value="${project.id}">${project.name}</option>`;
+            });
+            // 绑定项目选择事件，加载对应项目的用例
+            select.addEventListener('change', function() {
+                loadProjectCases(this.value);
+            });
+        });
+}
+
+// 加载项目用例
+function loadProjectCases(projectId) {
+    fetch(`/api/project/${projectId}/cases`)
+       .then(res => res.json())
+       .then(data => {
+            const container = document.getElementById('caseSelectionContainer');
+            container.innerHTML = '';
+
+            // 1. 按 case_id 升序排序
+            const sortedCases = data.data.sort((a, b) => a.case_id - b.case_id);
+
+            // 2. 遍历排序后的用例，渲染复选框
+            sortedCases.forEach(caseItem => {
+                // 3. 提取用例名称（去除 (ID: xxx) 后缀）
+                const caseName = caseItem.case_name.split(' (ID: ')[0];
+
+                container.innerHTML += `
+                    <div class="form-check">
+                        <input class="form-check-input case-checkbox" type="checkbox"
+                               value="${caseItem.case_id}" id="case-${caseItem.case_id}">
+                        <label class="form-check-label" for="case-${caseItem.case_id}">
+                            ${caseName}
+                        </label>
+                    </div>
+                `;
+            });
+        });
+}
+
+// 提交计划表单
+function submitPlanForm() {
+    const formData = new FormData(document.getElementById('createPlanForm'));
+    const caseIds = Array.from(
+        document.querySelectorAll('.case-checkbox:checked')
+    ).map(cb => parseInt(cb.value));
+    
+    const planData = {
+        plan_name: formData.get('plan_name'),
+        project_id: parseInt(formData.get('project_id')),
+        env_url: formData.get('env_url'),
+        execute_type: formData.get('execute_type'),
+        cron_expression: formData.get('cron_expression') || null,
+        case_ids: caseIds
+    };
+    
+    fetch('/api/plan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(planData)
+    }).then(res => res.json())
+     .then(data => {
+         if (data.code === 200) {
+             alert('计划创建成功');
+             loadPlans();
+             $('#createPlanModal').modal('hide');
+         } else {
+             alert(`创建失败：${data.msg}`);
+         }
+     });
+}
+
+// 加载计划列表
+function loadPlans() {
+    fetch('/api/plans')
+       .then(res => res.json())
+       .then(data => {
+            const tbody = document.getElementById('planTableBody');
+            tbody.innerHTML = '';
+            data.data.forEach(plan => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${plan.plan_id}</td>
+                        <td>${plan.plan_name}</td>
+                        <td>${plan.project_name}</td>
+                        <td>${plan.env_url}</td>
+                        <td>${formatExecuteType(plan.execute_type)}</td>
+                        <td><span class="badge bg-${getStatusColor(plan.status)}">${plan.status}</span></td>
+                        <td>
+                            <button class="btn btn-sm btn-success" onclick="executePlan(${plan.plan_id})">执行</button>
+                            <button class="btn btn-sm btn-info" onclick="viewPlanResults(${plan.plan_id})">查看结果</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        });
+}
+
+// 格式化执行方式显示
+function formatExecuteType(type) {
+    const map = {
+        'single': '单条执行',
+        'batch': '批量执行',
+        'timing': '定时执行'
+    };
+    return map[type] || type;
+}
+
+// 获取状态标签颜色
+function getStatusColor(status) {
+    const map = {
+        'draft': 'secondary',
+        'running': 'primary',
+        'completed': 'success'
+    };
+    return map[status] || 'dark';
+}
+
+// 执行测试计划
+function executePlan(planId) {
+    if (confirm('确定要执行该测试计划吗？')) {
+        fetch(`/api/plan/${planId}/execute`, {method: 'POST'})
+           .then(res => res.json())
+           .then(data => {
+                if (data.code === 200) {
+                    alert('计划已开始执行');
+                    window.location.href = `/execution-result/${data.record_id}`;
+                } else {
+                    alert(`执行失败：${data.msg}`);
+                }
+            });
+    }
+}
+</script>
+{% endblock %}

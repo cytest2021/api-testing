@@ -1,0 +1,201 @@
+{% extends "index.html" %}
+{% block content %}
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h3>执行结果详情</h3>
+        <div>
+            <button class="btn btn-secondary" onclick="exportResult('excel')">导出Excel</button>
+            <button class="btn btn-secondary" onclick="exportResult('html')">导出HTML</button>
+        </div>
+    </div>
+
+    <!-- 统计图表 -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">测试结果统计</h5>
+                    <canvas id="resultChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">耗时分布</h5>
+                    <canvas id="timeChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 执行信息 -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">执行概要</h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <p><strong>开始时间：</strong><span id="startTime"></span></p>
+                </div>
+                <div class="col-md-3">
+                    <p><strong>结束时间：</strong><span id="endTime"></span></p>
+                </div>
+                <div class="col-md-2">
+                    <p><strong>总用例数：</strong><span id="totalCases"></span></p>
+                </div>
+                <div class="col-md-2">
+                    <p><strong>通过数：</strong><span id="passCases" class="text-success"></span></p>
+                </div>
+                <div class="col-md-2">
+                    <p><strong>失败数：</strong><span id="failCases" class="text-danger"></span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用例结果列表 -->
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">用例执行结果</h5>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>用例ID</th>
+                        <th>用例名称</th>
+                        <th>状态</th>
+                        <th>耗时(秒)</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="resultTableBody">
+                    <!-- 结果数据将动态加载 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+// 获取当前记录ID（从URL参数中提取）
+const recordId = window.location.pathname.split('/').pop();
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', function() {
+    loadExecutionResult();
+    // 定时刷新结果（每3秒）
+    const refreshInterval = setInterval(() => {
+        loadExecutionResult(refreshInterval);
+    }, 3000);
+});
+
+// 加载执行结果
+function loadExecutionResult(refreshInterval) {
+    fetch(`/api/record/${recordId}`)
+       .then(res => res.json())
+       .then(data => {
+            if (data.code!== 200) return;
+            
+            const record = data.data.record;
+            const results = data.data.results;
+            
+            // 更新概要信息
+            document.getElementById('startTime').textContent = formatDateTime(record.start_time);
+            document.getElementById('endTime').textContent = record.end_time? formatDateTime(record.end_time) : '执行中';
+            document.getElementById('totalCases').textContent = record.total;
+            document.getElementById('passCases').textContent = record.pass;
+            document.getElementById('failCases').textContent = record.fail;
+            
+            // 更新结果表格
+            updateResultTable(results);
+            
+            // 绘制图表
+            drawCharts(record);
+            
+            // 如果执行完成，停止刷新
+            if (record.status === 'completed' && refreshInterval) {
+                clearInterval(refreshInterval);
+            }
+        });
+}
+
+// 更新结果表格
+function updateResultTable(results) {
+    const tbody = document.getElementById('resultTableBody');
+    tbody.innerHTML = '';
+    results.forEach(item => {
+        tbody.innerHTML += `
+            <tr>
+                <td>${item.case_id}</td>
+                <td>${item.case_name}</td>
+                <td>
+                    <span class="badge bg-${item.status === 'pass'? 'success' : 'danger'}">
+                        ${item.status === 'pass'? '通过' : '失败'}
+                    </span>
+                </td>
+                <td>${item.duration.toFixed(2)}</td>
+                <td>
+                    <button class="btn btn-sm btn-info" onclick="viewCaseDetail(${item.case_id})">详情</button>
+                </td>
+            </tr>
+        `;
+    });
+}
+
+// 绘制统计图表
+function drawCharts(record) {
+    // 结果饼图
+    const resultCtx = document.getElementById('resultChart').getContext('2d');
+    new Chart(resultCtx, {
+        type: 'pie',
+        data: {
+            labels: ['通过', '失败'],
+            datasets: [{
+                data: [record.pass, record.fail],
+                backgroundColor: ['#10B981', '#EF4444']
+            }]
+        }
+    });
+
+    // 耗时柱状图
+    const timeCtx = document.getElementById('timeChart').getContext('2d');
+    // 实际项目中可按用例ID分组统计耗时
+    new Chart(timeCtx, {
+        type: 'bar',
+        data: {
+            labels: ['0-1s', '1-3s', '3-5s', '5s以上'],
+            datasets: [{
+                label: '用例数量',
+                data: [5, 3, 1, 1], // 示例数据，实际需从结果计算
+                backgroundColor: '#3B82F6'
+            }]
+        },
+        options: {
+            scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+            }
+        }
+    });
+}
+
+// 格式化日期时间
+function formatDateTime(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleString();
+}
+
+// 导出结果
+function exportResult(type) {
+    fetch(`/api/record/${recordId}/export?type=${type}`)
+       .then(res => res.blob())
+       .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `execution_result_${recordId}.${type}`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+}
+</script>
+{% endblock %}

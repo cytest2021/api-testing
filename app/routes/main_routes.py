@@ -35,6 +35,14 @@ def test_case_generate():
 def interface_management():
     return render_template('interface_management.html')
 
+@main_bp.route('/test-plan-management')
+def test_plan_management():
+    return render_template('test_plan_management.html')
+
+@main_bp.route('/execution-result')
+def execution_result():
+    return render_template('execution_result.html')
+
 # --------------------- 新增：接口编辑页面路由 ---------------------
 @main_bp.route('/interface/edit/<int:interface_id>')
 def interface_edit(interface_id):

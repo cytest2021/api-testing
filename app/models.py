@@ -247,17 +247,59 @@ class InterfaceDependency(db.Model):
         return InterfaceDependency.query.filter_by(post_interface_id=post_id).all()
 
 # 6. 测试结果表（记录用例执行结果）
+# 测试计划模型
+class TestPlan(db.Model):
+    __tablename__ = 'test_plan'
+    plan_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    plan_name = db.Column(db.String(100), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.project_id'), nullable=False)
+    env_url = db.Column(db.String(255), nullable=False)  # 执行环境URL
+    execute_type = db.Column(db.String(20), nullable=False)  # 执行方式：single/batch/timing
+    cron_expression = db.Column(db.String(50), nullable=True)  # 定时任务表达式
+    creator_id = db.Column(db.Integer, db.ForeignKey('user.user_id'), nullable=False)
+    create_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    status = db.Column(db.String(20), default='draft')  # 计划状态：draft/running/completed
+
+    # 关联计划包含的用例
+    plan_cases = db.relationship('PlanCase', backref='test_plan', cascade='all, delete-orphan')
+    # 关联执行记录
+    exec_records = db.relationship('ExecutionRecord', backref='test_plan', cascade='all, delete-orphan')
+
+
+# 计划-用例关联表（维护执行顺序）
+class PlanCase(db.Model):
+    __tablename__ = 'plan_case'
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey('test_plan.plan_id'), nullable=False)
+    case_id = db.Column(db.Integer, db.ForeignKey('test_case.case_id'), nullable=False)
+    sort_order = db.Column(db.Integer, nullable=False)  # 执行顺序
+    __table_args__ = (db.UniqueConstraint('plan_id', 'case_id', name='unique_plan_case'),)
+
+
+# 执行记录模型
+class ExecutionRecord(db.Model):
+    __tablename__ = 'execution_record'
+    record_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    plan_id = db.Column(db.Integer, db.ForeignKey('test_plan.plan_id'), nullable=False)
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime, nullable=True)
+    total_cases = db.Column(db.Integer, default=0)
+    pass_cases = db.Column(db.Integer, default=0)
+    fail_cases = db.Column(db.Integer, default=0)
+    status = db.Column(db.String(20), default='running')  # running/completed
+
+
+# 扩展测试结果模型（关联执行记录）
 class TestResult(db.Model):
     __tablename__ = 'test_result'
-    # 新增：指定表字符集为 utf8mb4
-    __table_args__ = {
-        "mysql_charset": "utf8mb4",
-        "mysql_collate": "utf8mb4_unicode_ci"
-    }
+    # 原有字段保持不变
     result_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    case_id = db.Column(db.Integer, db.ForeignKey('test_case.case_id'), nullable=False)  # 关联用例
+    case_id = db.Column(db.Integer, db.ForeignKey('test_case.case_id'), nullable=False)
     exec_time = db.Column(db.DateTime, default=datetime.now, nullable=False)
-    status = db.Column(db.Enum('pass', 'fail', 'error'), nullable=False)  # 执行状态
-    actual_response = db.Column(db.Text, nullable=True)  # 实际响应内容
-    duration = db.Column(db.Float, nullable=True)  # 执行耗时（秒）
-    error_msg = db.Column(db.Text, nullable=True)  # 错误信息（失败/异常时）
+    actual_response = db.Column(db.Text, nullable=True)
+    duration = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(20), nullable=False)  # pass/fail
+    error_msg = db.Column(db.Text, nullable=True)
+
+    # 新增关联执行记录的字段
+    record_id = db.Column(db.Integer, db.ForeignKey('execution_record.record_id'), nullable=True)

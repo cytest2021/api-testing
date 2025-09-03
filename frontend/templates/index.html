@@ -5,28 +5,47 @@
     <title>接口测试平台</title>
     <!-- 本地引入 Bootstrap CSS -->
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
-    <!-- 自定义样式（含顶部、左侧导航修改） -->
+    <!-- 自定义样式 -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <style>
+        /* 登录提示样式（保留，以备后续扩展） */
+       .login-prompt {
+            min-height: 50vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        /* 优化用户名显示样式，使其与导航栏区分开 */
+       .navbar-nav.dropdown.dropdown-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+       .navbar-nav.dropdown.dropdown-toggle::after {
+            margin-top: 0.25rem;
+        }
+        /* 补充：确保导航栏容器无额外边距，与内容区对齐 */
+       .navbar.container-fluid {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+        }
+    </style>
 </head>
 <body>
-    <!-- 顶部导航栏（已改浅蓝色） -->
-    <nav class="navbar navbar-dark">
+    <!-- 顶部导航栏（蓝色、靠右布局） -->
+    <nav class="navbar navbar-expand-md navbar-dark bg-primary">
         <div class="container-fluid">
+            <!-- 品牌 -->
             <a class="navbar-brand" href="/">接口测试平台</a>
             <!-- 小屏幕折叠按钮 -->
-            <button class="navbar-toggler d-md-none" type="button"
-                    data-bs-toggle="collapse" data-bs-target="#sidebarCollapse">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+                    aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-        </div>
-    </nav>
-
-    <!-- 主体布局：左侧导航 + 右侧内容 -->
-    <div class="row g-1">
-        <!-- 左侧垂直导航栏（已加底色） -->
-        <nav id="sidebarCollapse" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-            <div class="position-sticky pt-3">
-                <ul class="nav flex-column">
+            <!-- 导航内容（靠右对齐） -->
+            <div class="collapse navbar-collapse justify-content-end" id="navbarNav">
+                <ul class="navbar-nav">
                     <li class="nav-item">
                         <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">首页</a>
                     </li>
@@ -40,24 +59,58 @@
                         <a class="nav-link {% if request.path == '/test-case-management' %}active{% endif %}" href="/test-case-management">用例管理</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if request.path == '/results' %}active{% endif %}" href="/results">测试结果</a>
+                        <a class="nav-link {% if request.path == '/test-plan-management' %}active{% endif %}" href="/test-plan-management">测试计划管理</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.path == '/execution-result' %}active{% endif %}" href="/execution-result">测试结果</a>
+                    </li>
+                    <!-- 登录/用户菜单，固定为已登录状态 -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <span>用户1</span>
+                            <i class="bi bi-chevron-down"></i>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                            <li><a class="dropdown-item" href="#">设置</a></li>
+                            <li><a class="dropdown-item" href="#">登出</a></li>
+                        </ul>
                     </li>
                 </ul>
             </div>
-        </nav>
-
-        <!-- 右侧内容区域 -->
-        <main class="col-md-9 ms-sm-auto col-lg-10 px-2">
-            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                <h1 class="h2">{% block page_title %}{% endblock %}</h1>
-            </div>
-            {% block content %}{% endblock %}
-        </main>
-    </div>
-
+        </div>
+    </nav>
+    <!-- 右侧内容区域：使用Bootstrap内置类px-2缩小左右内边距，mx-0清除额外外边距 -->
+    <main class="container mt-4 px-2 mx-0">
+        <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+            <h1 class="h2">{% block page_title %}{% endblock %}</h1>
+        </div>
+        {% block content %}
+        <!-- 移除首页登录提示（因为已固定为登录状态） -->
+        {% endblock %}
+    </main>
     <!-- 依赖脚本 -->
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
-<!--    <script src="{{ url_for('static', filename='js/main.js') }}"></script>-->
+    <script>
+        $(document).ready(function () {
+            // 检查并销毁旧的下拉菜单实例，避免重复初始化问题
+            const existingDropdown = $('.dropdown-toggle').data('bs.dropdown');
+            if (existingDropdown) {
+                existingDropdown.dispose();
+            }
+            // 重新初始化下拉菜单，确保点击生效
+            $('.dropdown-toggle').dropdown();
+            // 登出按钮点击事件（示例逻辑）
+            $('.dropdown-menu a:contains("登出")').click(function (e) {
+                e.preventDefault();
+                // 实际项目中替换为后端登出接口请求
+                if (confirm('确定要登出当前账号吗？')) {
+                    alert('登出成功，即将返回首页');
+                    window.location.href = '/';
+                }
+            });
+        });
+    </script>
 </body>
 </html>

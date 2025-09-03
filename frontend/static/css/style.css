@@ -85,6 +85,7 @@
 .test-case-management-page #caseTable td:nth-child(3) {
   width: 8em;
 }
+
 .test-case-management-page #caseTable th:nth-child(4),
 .test-case-management-page #caseTable td:nth-child(4) {
   width: 8em;
@@ -100,4 +101,20 @@
 .test-case-management-page #caseTable th:nth-child(7),
 .test-case-management-page #caseTable td:nth-child(7) {
   min-width: 12em;
+}
+
+/* 小屏幕下缩小边距 */
+@media (max-width: 768px) {
+    .container {
+        padding-left: 5px !important;
+        padding-right: 5px !important;
+    }
+}
+
+/* 大屏幕下恢复适度边距 */
+@media (min-width: 1200px) {
+    .container {
+        padding-left: 20px !important;
+        padding-right: 20px !important;
+    }
 }
