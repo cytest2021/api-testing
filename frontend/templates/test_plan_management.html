@@ -1,140 +1,203 @@
 {% extends "index.html" %}
 {% block content %}
+<!-- 1. 引入 Bootstrap 资源（放在页面顶部，确保样式优先加载） -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
 <div class="container-fluid p-4">
+    <!-- 页面标题栏：用 Bootstrap 弹性布局 + 按钮样式 -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h3>测试计划管理</h3>
+        <h3 class="text-primary fw-bold">测试计划管理</h3>
+        <!-- 直接用 Bootstrap 按钮类：btn + btn-primary + 图标 -->
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createPlanModal">
-            <i class="bi bi-plus-circle"></i> 新建计划
+            <i class="bi bi-plus-circle me-2"></i>新建计划
         </button>
     </div>
 
-    <!-- 计划列表 -->
-    <div class="card">
+    <!-- 计划列表：用 Bootstrap Card + Table 样式 -->
+    <div class="card shadow-sm border-0">
         <div class="card-body">
-            <table class="table table-striped">
-                <thead>
+            <!-- 表格：用 Bootstrap 预定义类实现条纹、hover 效果 -->
+            <table class="table table-striped table-hover table-responsive">
+                <thead class="table-light">
                     <tr>
-                        <th>计划ID</th>
+                        <th class="text-center">计划ID</th>
                         <th>计划名称</th>
                         <th>所属项目</th>
                         <th>执行环境</th>
                         <th>执行方式</th>
-                        <th>状态</th>
-                        <th>操作</th>
+                        <th class="text-center">状态</th>
+                        <th class="text-center">操作</th>
                     </tr>
                 </thead>
                 <tbody id="planTableBody">
-                    <!-- 计划数据将动态加载 -->
+                    <!-- 计划数据动态加载 -->
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-<!-- 创建计划模态框 -->
-<div class="modal fade" id="createPlanModal" tabindex="-1">
+<!-- 创建计划模态框：Bootstrap 原生模态框，补充样式类 -->
+<div class="modal fade" id="createPlanModal" tabindex="-1" aria-labelledby="createPlanModalLabel">
     <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">创建测试计划</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="createPlanModalLabel">
+                    <i class="bi bi-file-plus me-2"></i>创建测试计划
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form id="createPlanForm">
-                    <div class="mb-3">
-                        <label class="form-label">计划名称</label>
-                        <input type="text" class="form-control" name="plan_name" required>
+                <form id="createPlanForm" class="row g-3">
+                    <!-- 计划名称：Bootstrap 表单类 form-control -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">计划名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="plan_name" required placeholder="请输入测试计划名称">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">所属项目</label>
+                    <!-- 所属项目：Bootstrap 下拉框 form-select -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">所属项目 <span class="text-danger">*</span></label>
                         <select class="form-select" name="project_id" id="projectSelect" required>
-                            <!-- 项目选项将动态加载 -->
+                            <option value="" disabled selected>请选择项目</option>
+                            <!-- 项目选项动态加载 -->
                         </select>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">执行环境URL</label>
-                        <input type="text" class="form-control" name="env_url" required>
+                    <!-- 执行环境URL：form-control + 输入组 -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">执行环境URL <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-link"></i></span>
+                            <input type="text" class="form-control" name="env_url" required placeholder="例如：http://127.0.0.1:8888">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">执行方式</label>
+                    <!-- 执行方式 + Cron表达式：Bootstrap 条件显示 -->
+                    <div class="col-md-6">
+                        <label class="form-label fw-semibold">执行方式 <span class="text-danger">*</span></label>
                         <select class="form-select" name="execute_type" id="executeTypeSelect" required>
                             <option value="batch">批量执行</option>
-                            <option value="single">单条执行</option>
                             <option value="timing">定时执行</option>
                         </select>
                     </div>
-                    <div class="mb-3" id="cronExpressionGroup" style="display: none;">
-                        <label class="form-label">Cron表达式</label>
-                        <input type="text" class="form-control" name="cron_expression" 
-                               placeholder="例如：0 0 * * * 表示每天凌晨执行">
+                    <div class="col-md-6" id="cronExpressionGroup" style="display: none;">
+                        <label class="form-label fw-semibold">Cron表达式 <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-clock"></i></span>
+                            <input type="text" class="form-control" name="cron_expression" placeholder="例如：0 0 * * *（每天凌晨执行）">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">选择测试用例</label>
-                        <div id="caseSelectionContainer" style="max-height: 200px; overflow-y: auto;">
-                            <!-- 用例复选框将动态加载 -->
+                    <!-- 选择测试用例：用 Bootstrap 卡片包裹滚动区域 -->
+                    <div class="col-12">
+                        <label class="form-label fw-semibold">选择测试用例 <span class="text-danger">*</span></label>
+                        <div id="caseSelectionContainer" class="border rounded-2 p-3" style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa;">
+                            <!-- 用例复选框动态加载 -->
                         </div>
                     </div>
                 </form>
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                <button type="button" class="btn btn-primary" onclick="submitPlanForm()">创建</button>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>取消
+                </button>
+                <button type="button" class="btn btn-primary" onclick="submitPlanForm()">
+                    <i class="bi bi-save me-1"></i>创建
+                </button>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑用例顺序模态框：Bootstrap 模态框 + 拖拽样式 -->
+<div class="modal fade" id="editOrderModal" tabindex="-1" aria-labelledby="editOrderModalLabel">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="editOrderModalLabel">
+                    <i class="bi bi-sort-amount-up me-2"></i>编辑用例执行顺序
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="currentPlanId">
+                <!-- 拖拽提示：Bootstrap Alert 组件 -->
+                <div class="alert alert-info alert-dismissible fade show mb-3" role="alert">
+                    <i class="bi bi-hand-pointer me-2"></i>拖动用例项调整执行顺序，点击“保存”生效
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                <!-- 用例列表容器：Bootstrap 间距类 + 背景 -->
+                <div id="caseOrderList" class="p-2 bg-light rounded-2" style="min-height: 300px;"></div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle me-1"></i>取消
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveCaseOrder()">
+                    <i class="bi bi-save me-1"></i>保存顺序
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 成功提示 Toast：Bootstrap 原生 Toast 组件 -->
+<div class="toast-container position-fixed bottom-3 end-3">
+    <div class="toast align-items-center text-bg-success border-0" id="successToast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="d-flex">
+            <div class="toast-body" id="toastMessage">
+                操作成功！
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
     </div>
 </div>
 
 <script>
 // 页面加载时初始化
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     loadProjects();
     loadPlans();
-    
-    // 执行方式切换显示Cron表达式
-    document.getElementById('executeTypeSelect').addEventListener('change', function() {
+
+    // 执行方式切换显示Cron表达式（Bootstrap 显示/隐藏）
+    document.getElementById('executeTypeSelect').addEventListener('change', function () {
         const cronGroup = document.getElementById('cronExpressionGroup');
-        cronGroup.style.display = this.value === 'timing'? 'block' : 'none';
+        cronGroup.style.display = this.value === 'timing' ? 'block' : 'none';
     });
 });
 
 // 加载项目列表
 function loadProjects() {
     fetch('/api/all-projects')
-       .then(res => res.json())
-       .then(data => {
+      .then(res => res.json())
+      .then(data => {
             const select = document.getElementById('projectSelect');
             data.data.forEach(project => {
                 select.innerHTML += `<option value="${project.id}">${project.name}</option>`;
             });
-            // 绑定项目选择事件，加载对应项目的用例
-            select.addEventListener('change', function() {
+            select.addEventListener('change', function () {
                 loadProjectCases(this.value);
             });
         });
 }
 
-// 加载项目用例
+// 加载项目用例（用 Bootstrap 复选框样式）
 function loadProjectCases(projectId) {
-    fetch(`/api/project/${projectId}/cases`)
-       .then(res => res.json())
-       .then(data => {
+    fetch(`/api/project/${projectId}/all_cases`)
+      .then(res => res.json())
+      .then(data => {
             const container = document.getElementById('caseSelectionContainer');
             container.innerHTML = '';
-
-            // 1. 按 case_id 升序排序
             const sortedCases = data.data.sort((a, b) => a.case_id - b.case_id);
 
-            // 2. 遍历排序后的用例，渲染复选框
+            // 用 Bootstrap 网格布局 + 卡片包裹复选框
             sortedCases.forEach(caseItem => {
-                // 3. 提取用例名称（去除 (ID: xxx) 后缀）
                 const caseName = caseItem.case_name.split(' (ID: ')[0];
-
                 container.innerHTML += `
-                    <div class="form-check">
+                    <div class="form-check form-check-inline bg-white p-2 rounded-1 shadow-sm me-3 mb-3" style="width: calc(33.333% - 1rem);">
                         <input class="form-check-input case-checkbox" type="checkbox"
                                value="${caseItem.case_id}" id="case-${caseItem.case_id}">
-                        <label class="form-check-label" for="case-${caseItem.case_id}">
-                            ${caseName}
+                        <label class="form-check-label ms-2" for="case-${caseItem.case_id}">
+                            <i class="bi bi-file-code text-primary me-1"></i>${caseName}
                         </label>
                     </div>
                 `;
@@ -148,7 +211,7 @@ function submitPlanForm() {
     const caseIds = Array.from(
         document.querySelectorAll('.case-checkbox:checked')
     ).map(cb => parseInt(cb.value));
-    
+
     const planData = {
         plan_name: formData.get('plan_name'),
         project_id: parseInt(formData.get('project_id')),
@@ -157,7 +220,7 @@ function submitPlanForm() {
         cron_expression: formData.get('cron_expression') || null,
         case_ids: caseIds
     };
-    
+
     fetch('/api/plan', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -165,9 +228,14 @@ function submitPlanForm() {
     }).then(res => res.json())
      .then(data => {
          if (data.code === 200) {
-             alert('计划创建成功');
+             // 用 Bootstrap Toast 显示成功提示
+             const toast = new bootstrap.Toast(document.getElementById('successToast'));
+             document.getElementById('toastMessage').textContent = "计划创建成功！";
+             toast.show();
+
              loadPlans();
-             $('#createPlanModal').modal('hide');
+             const modal = bootstrap.Modal.getInstance(document.getElementById('createPlanModal'));
+             modal.hide();
          } else {
              alert(`创建失败：${data.msg}`);
          }
@@ -177,22 +245,44 @@ function submitPlanForm() {
 // 加载计划列表
 function loadPlans() {
     fetch('/api/plans')
-       .then(res => res.json())
-       .then(data => {
+      .then(res => res.json())
+      .then(data => {
             const tbody = document.getElementById('planTableBody');
             tbody.innerHTML = '';
             data.data.forEach(plan => {
+                // 状态标签：Bootstrap Badge 类
+                let statusBadge = '';
+                if (plan.status === '草稿') statusBadge = '<span class="badge bg-secondary">草稿</span>';
+                if (plan.status === '运行中') statusBadge = '<span class="badge bg-primary">运行中</span>';
+                if (plan.status === '已完成') statusBadge = '<span class="badge bg-success">已完成</span>';
+
                 tbody.innerHTML += `
-                    <tr>
-                        <td>${plan.plan_id}</td>
+                    <tr class="align-middle">
+                        <td class="text-center">${plan.plan_id}</td>
                         <td>${plan.plan_name}</td>
                         <td>${plan.project_name}</td>
-                        <td>${plan.env_url}</td>
+                        <td><code>${plan.env_url}</code></td>
                         <td>${formatExecuteType(plan.execute_type)}</td>
-                        <td><span class="badge bg-${getStatusColor(plan.status)}">${plan.status}</span></td>
-                        <td>
-                            <button class="btn btn-sm btn-success" onclick="executePlan(${plan.plan_id})">执行</button>
-                            <button class="btn btn-sm btn-info" onclick="viewPlanResults(${plan.plan_id})">查看结果</button>
+                        <td class="text-center">${statusBadge}</td>
+                        <td class="text-center">
+                            <!-- 编辑计划按钮 -->
+                            <button class="btn btn-primary btn-sm me-2" onclick="editPlan(${plan.plan_id})">
+                                <i class="bi bi-pencil-square edit-plan-icon"></i> 编辑计划
+                            </button>
+                            <!-- 操作按钮：Bootstrap 按钮大小 + 颜色 -->
+                            <button class="btn btn-warning btn-sm me-2" onclick="editCaseOrder(${plan.plan_id})">
+                                <i class="bi bi-pencil"></i>编辑顺序
+                            </button>
+                            <button class="btn btn-success btn-sm me-2" onclick="executePlan(${plan.plan_id})">
+                                <i class="bi bi-play-circle me-1"></i> 执 行
+                            </button>
+                            <button class="btn btn-info btn-sm" onclick="viewPlanResults(${plan.plan_id})">
+                                <i class="bi bi-bar-chart me-1"></i>查看结果
+                            </button>
+                            <!-- 删除计划按钮 -->
+                            <button class="btn btn-danger btn-sm" onclick="deletePlan(${plan.plan_id})">
+                                <i class="bi bi-trash delete-plan-icon"></i> 删除计划
+                            </button>
                         </td>
                     </tr>
                 `;
@@ -203,37 +293,172 @@ function loadPlans() {
 // 格式化执行方式显示
 function formatExecuteType(type) {
     const map = {
-        'single': '单条执行',
         'batch': '批量执行',
         'timing': '定时执行'
     };
     return map[type] || type;
 }
 
-// 获取状态标签颜色
-function getStatusColor(status) {
-    const map = {
-        'draft': 'secondary',
-        'running': 'primary',
-        'completed': 'success'
-    };
-    return map[status] || 'dark';
-}
-
 // 执行测试计划
 function executePlan(planId) {
-    if (confirm('确定要执行该测试计划吗？')) {
-        fetch(`/api/plan/${planId}/execute`, {method: 'POST'})
-           .then(res => res.json())
-           .then(data => {
-                if (data.code === 200) {
-                    alert('计划已开始执行');
-                    window.location.href = `/execution-result/${data.record_id}`;
+    fetch(`/api/plan/${planId}/execute`, { method: "POST" })
+      .then(res => res.json())
+      .then(data => {
+            if (data.code === 200) {
+                const toast = new bootstrap.Toast(document.getElementById('successToast'));
+                document.getElementById('toastMessage').textContent = "计划执行中，可前往结果页面查看进度！";
+                toast.show();
+            } else {
+                alert(data.msg);
+            }
+        });
+}
+
+// 查看计划结果
+function viewPlanResults(planId) {
+    window.location.href = `/plan_results?plan_id=${planId}`;
+}
+
+// 打开“编辑顺序”弹窗
+function editCaseOrder(planId) {
+    document.getElementById("currentPlanId").value = planId;
+    fetch(`/api/plan/${planId}/cases`)
+      .then(res => res.json())
+      .then(data => {
+            if (data.code === 200) {
+                renderCaseOrder(data.data);
+                initDragAndDrop();
+                const modal = new bootstrap.Modal(document.getElementById("editOrderModal"));
+                modal.show();
+            } else {
+                alert(data.msg);
+            }
+        });
+}
+
+// 渲染用例列表（用 Bootstrap 卡片实现拖拽项）
+function renderCaseOrder(cases) {
+    const container = document.getElementById("caseOrderList");
+    container.innerHTML = "";
+    const sortedCases = [...cases].sort((a, b) => a.sort_order - b.sort_order);
+
+    sortedCases.forEach((caseInfo, index) => {
+        const caseName = caseInfo.case_name.split(' (ID: ')[0];
+        // 用 Bootstrap Card
+                // 用 Bootstrap Card 实现拖拽项
+        container.innerHTML += `
+            <div class="card mb-3 case-item" data-case-id="${caseInfo.case_id}" draggable="true">
+                <div class="card-body d-flex align-items-center">
+                    <div class="case-handle me-3" style="cursor: grab;">
+                        <i class="bi bi-grip-vertical text-muted"></i>
+                    </div>
+                    <div class="case-name flex-grow-1">${caseName}</div>
+                    <div class="case-order badge bg-light text-dark border">
+                        顺序: ${index + 1}
+                    </div>
+                    <input type="hidden" name="case_id" value="${caseInfo.case_id}">
+                    <input type="hidden" class="case-sort" value="${index + 1}">
+                </div>
+            </div>
+        `;
+    });
+}
+
+// 初始化拖拽排序功能
+function initDragAndDrop() {
+    const container = document.getElementById('caseOrderList');
+    const items = container.querySelectorAll('.case-item');
+    let draggedItem = null;
+
+    items.forEach(item => {
+        item.addEventListener('dragstart', function() {
+            draggedItem = this;
+            setTimeout(() => this.classList.add('dragging'), 0);
+            this.style.opacity = '0.5';
+        });
+
+        item.addEventListener('dragend', function() {
+            draggedItem = null;
+            this.classList.remove('dragging');
+            this.style.opacity = '1';
+            updateOrderNumbers();
+        });
+
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+        });
+
+        item.addEventListener('drop', function(e) {
+            e.preventDefault();
+            if (draggedItem!== this) {
+                const items = [...container.querySelectorAll('.case-item:not(.dragging)')];
+                const index = items.indexOf(this);
+
+                if (index > items.indexOf(draggedItem)) {
+                    container.insertBefore(draggedItem, this.nextSibling);
                 } else {
-                    alert(`执行失败：${data.msg}`);
+                    container.insertBefore(draggedItem, this);
                 }
-            });
-    }
+            }
+        });
+    });
+
+    container.addEventListener('dragover', function(e) {
+        e.preventDefault();
+    });
+
+    container.addEventListener('drop', function(e) {
+        e.preventDefault();
+        if (draggedItem &&!e.target.closest('.case-item')) {
+            container.appendChild(draggedItem);
+        }
+    });
+}
+
+// 更新排序后的顺序编号
+function updateOrderNumbers() {
+    const items = document.querySelectorAll('.case-item');
+    items.forEach((item, index) => {
+        const orderEl = item.querySelector('.case-order');
+        orderEl.textContent = `顺序: ${index + 1}`;
+
+        const sortInput = item.querySelector('.case-sort');
+        sortInput.value = index + 1;
+    });
+}
+
+// 保存新的执行顺序
+function saveCaseOrder() {
+    const planId = document.getElementById("currentPlanId").value;
+    const caseItems = document.querySelectorAll(".case-item");
+    const orderData = [];
+
+    caseItems.forEach((item, index) => {
+        orderData.push({
+            "case_id": item.getAttribute('data-case-id'),
+            "sort_order": index + 1
+        });
+    });
+
+    fetch(`/api/plan/${planId}/cases`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderData)
+    })
+   .then(res => res.json())
+   .then(data => {
+        if (data.code === 200) {
+            const toast = new bootstrap.Toast(document.getElementById('successToast'));
+            document.getElementById('toastMessage').textContent = "用例执行顺序更新成功！";
+            toast.show();
+
+            const modal = bootstrap.Modal.getInstance(document.getElementById("editOrderModal"));
+            modal.hide();
+            loadPlans();
+        } else {
+            alert(data.msg);
+        }
+    });
 }
 </script>
 {% endblock %}

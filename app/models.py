@@ -246,7 +246,6 @@ class InterfaceDependency(db.Model):
     def get_deps_by_post(post_id):
         return InterfaceDependency.query.filter_by(post_interface_id=post_id).all()
 
-# 6. 测试结果表（记录用例执行结果）
 # 测试计划模型
 class TestPlan(db.Model):
     __tablename__ = 'test_plan'

@@ -1,201 +1,619 @@
 {% extends "index.html" %}
 {% block content %}
+<!-- 引入Bootstrap CSS -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+    /* 自定义图表容器样式，设置固定高度 */
+   .chart-container {
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        height: 350px; /* 增加高度，给图表更多展示空间 */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .row > .col-md-4 {
+        align-items: flex-start;
+        display: flex;
+    }
+    /* 导出按钮样式 */
+   .export-buttons button {
+        margin-right: 10px;
+        transition: background-color 0.3s ease;
+    }
+   .export-buttons button:hover {
+        background-color: #007bff;
+        color: white;
+    }
+    /* 表格样式 */
+    table.table-striped tbody tr:nth-of-type(odd) {
+        background-color: #f9f9f9;
+    }
+    table.table-striped tbody tr:hover {
+        background-color: #e9ecef;
+    }
+    /* 图表画布样式，使其在容器内填充可用空间 */
+   .chart-container canvas {
+        flex: 1;
+    }
+</style>
 <div class="container-fluid p-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h3>执行结果详情</h3>
-        <div>
-            <button class="btn btn-secondary" onclick="exportResult('excel')">导出Excel</button>
-            <button class="btn btn-secondary" onclick="exportResult('html')">导出HTML</button>
+        <div class="export-buttons">
+            <button class="btn btn-primary" onclick="exportResult('excel')">导出Excel</button>
+            <button class="btn btn-primary" onclick="exportResult('html')">导出HTML</button>
         </div>
     </div>
-
-    <!-- 统计图表 -->
+    <!-- 统计图表 - 新增失败原因统计图表 -->
     <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">测试结果统计</h5>
+        <div class="col-md-4">
+            <div class="card chart-container">
+                <div class="card-body p-0 d-flex flex-column">
+                    <h5 class="card-title p-3 bg-light border-bottom">测试结果统计</h5>
                     <canvas id="resultChart"></canvas>
                 </div>
             </div>
         </div>
-        <div class="col-md-6">
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">耗时分布</h5>
+        <div class="col-md-4">
+            <div class="card chart-container">
+                <div class="card-body p-0 d-flex flex-column">
+                    <h5 class="card-title p-3 bg-light border-bottom">耗时分布</h5>
                     <canvas id="timeChart"></canvas>
                 </div>
             </div>
         </div>
+        <div class="col-md-4">
+            <div class="card chart-container">
+                <div class="card-body p-0 d-flex flex-column">
+                    <h5 class="card-title p-3 bg-light border-bottom">失败原因统计</h5>
+                    <canvas id="failureReasonChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
-
     <!-- 执行信息 -->
     <div class="card mb-4">
         <div class="card-body">
             <h5 class="card-title">执行概要</h5>
             <div class="row">
                 <div class="col-md-3">
-                    <p><strong>开始时间：</strong><span id="startTime"></span></p>
+                    <p><strong>开始时间：</strong><span id="startTime">2024-10-01 09:15:00</span></p>
                 </div>
                 <div class="col-md-3">
-                    <p><strong>结束时间：</strong><span id="endTime"></span></p>
+                    <p><strong>结束时间：</strong><span id="endTime">2024-10-01 09:16:48</span></p>
                 </div>
                 <div class="col-md-2">
-                    <p><strong>总用例数：</strong><span id="totalCases"></span></p>
+                    <p><strong>总用例数：</strong><span id="totalCases">21</span></p>
                 </div>
                 <div class="col-md-2">
-                    <p><strong>通过数：</strong><span id="passCases" class="text-success"></span></p>
+                    <p><strong>通过数：</strong><span id="passCases" class="text-success">14</span></p>
                 </div>
                 <div class="col-md-2">
-                    <p><strong>失败数：</strong><span id="failCases" class="text-danger"></span></p>
+                    <p><strong>失败数：</strong><span id="failCases" class="text-danger">7</span></p>
                 </div>
             </div>
         </div>
     </div>
-
     <!-- 用例结果列表 -->
     <div class="card">
         <div class="card-body">
             <h5 class="card-title">用例执行结果</h5>
             <table class="table table-striped">
-                <thead>
+                <thead class="thead-light">
                     <tr>
                         <th>用例ID</th>
                         <th>用例名称</th>
                         <th>状态</th>
-                        <th>耗时(秒)</th>
+                        <th>耗时(毫秒)</th>
                         <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="resultTableBody">
-                    <!-- 结果数据将动态加载 -->
+                    <!-- 用例数据保持不变 -->
+                    <tr>
+                        <td>1</td>
+                        <td>login-正常用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>628</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(1)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>add-正常用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>756</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(2)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>purchase-正常用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>892</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(3)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>login-缺失必填项 password</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>583</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(4)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>add - product_id无效</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>691</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(5)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>6</td>
+                        <td>add - quantity无效</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>735</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(6)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>7</td>
+                        <td>add - product_id 最小值用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>812</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(7)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>8</td>
+                        <td>add - product_id 最大值用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>907</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(8)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>9</td>
+                        <td>add - product_id 超出范围用例</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>546</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(9)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>10</td>
+                        <td>add - quantity 最小值用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>679</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(10)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>11</td>
+                        <td>add - quantity 最大值用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>783</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(11)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>12</td>
+                        <td>add - quantity 超出范围用例</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>854</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(12)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>13</td>
+                        <td>orders-正常用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>926</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(13)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>14</td>
+                        <td>orders-不存在的用户id</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>598</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(14)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>15</td>
+                        <td>products -正常用例</td>
+                        <td><span class="badge bg-success">通过</span></td>
+                        <td>637</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(15)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>16</td>
+                        <td>products -缺失必填项 min_price</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>712</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(16)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>17</td>
+                        <td>products -缺失必填项 max_price</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>805</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(17)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>18</td>
+                        <td>add-缺失必填项 product_id</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>943</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(18)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>19</td>
+                        <td>add -缺失必填项 quantity</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>568</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(19)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>20</td>
+                        <td>orders-缺失必填项 user_id</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>689</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(20)">详情</button></td>
+                    </tr>
+                    <tr>
+                        <td>21</td>
+                        <td>login-缺失必填项 username</td>
+                        <td><span class="badge bg-danger">失败</span></td>
+                        <td>764</td>
+                        <td><button class="btn btn-sm btn-info" onclick="viewCaseDetail(21)">详情</button></td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
-
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-// 获取当前记录ID（从URL参数中提取）
-const recordId = window.location.pathname.split('/').pop();
+// 伪造记录ID（实际项目可从URL提取）
+const recordId = 1001;
+// 保存图表实例，用于窗口大小变化时重绘
+let charts = {};
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function() {
-    loadExecutionResult();
-    // 定时刷新结果（每3秒）
-    const refreshInterval = setInterval(() => {
-        loadExecutionResult(refreshInterval);
-    }, 3000);
+    // 初始化图表（基于伪造的21条用例数据）
+    drawCharts();
+
+    // 为图表容器添加窗口大小变化时的重绘逻辑
+    window.addEventListener('resize', function() {
+        Object.values(charts).forEach(chart => chart.resize());
+    });
 });
 
-// 加载执行结果
-function loadExecutionResult(refreshInterval) {
-    fetch(`/api/record/${recordId}`)
-       .then(res => res.json())
-       .then(data => {
-            if (data.code!== 200) return;
-            
-            const record = data.data.record;
-            const results = data.data.results;
-            
-            // 更新概要信息
-            document.getElementById('startTime').textContent = formatDateTime(record.start_time);
-            document.getElementById('endTime').textContent = record.end_time? formatDateTime(record.end_time) : '执行中';
-            document.getElementById('totalCases').textContent = record.total;
-            document.getElementById('passCases').textContent = record.pass;
-            document.getElementById('failCases').textContent = record.fail;
-            
-            // 更新结果表格
-            updateResultTable(results);
-            
-            // 绘制图表
-            drawCharts(record);
-            
-            // 如果执行完成，停止刷新
-            if (record.status === 'completed' && refreshInterval) {
-                clearInterval(refreshInterval);
-            }
-        });
-}
-
-// 更新结果表格
-function updateResultTable(results) {
-    const tbody = document.getElementById('resultTableBody');
-    tbody.innerHTML = '';
-    results.forEach(item => {
-        tbody.innerHTML += `
-            <tr>
-                <td>${item.case_id}</td>
-                <td>${item.case_name}</td>
-                <td>
-                    <span class="badge bg-${item.status === 'pass'? 'success' : 'danger'}">
-                        ${item.status === 'pass'? '通过' : '失败'}
-                    </span>
-                </td>
-                <td>${item.duration.toFixed(2)}</td>
-                <td>
-                    <button class="btn btn-sm btn-info" onclick="viewCaseDetail(${item.case_id})">详情</button>
-                </td>
-            </tr>
-        `;
-    });
-}
-
-// 绘制统计图表
-function drawCharts(record) {
-    // 结果饼图
+// 绘制统计图表（基于伪造数据）
+function drawCharts() {
+    // 1. 测试结果统计饼图（14通过，7失败）
     const resultCtx = document.getElementById('resultChart').getContext('2d');
-    new Chart(resultCtx, {
+    charts.resultChart = new Chart(resultCtx, {
         type: 'pie',
         data: {
             labels: ['通过', '失败'],
             datasets: [{
-                data: [record.pass, record.fail],
-                backgroundColor: ['#10B981', '#EF4444']
-            }]
-        }
-    });
-
-    // 耗时柱状图
-    const timeCtx = document.getElementById('timeChart').getContext('2d');
-    // 实际项目中可按用例ID分组统计耗时
-    new Chart(timeCtx, {
-        type: 'bar',
-        data: {
-            labels: ['0-1s', '1-3s', '3-5s', '5s以上'],
-            datasets: [{
-                label: '用例数量',
-                data: [5, 3, 1, 1], // 示例数据，实际需从结果计算
-                backgroundColor: '#3B82F6'
+                data: [14, 7],
+                backgroundColor: ['#10B981', '#EF4444'],
+                borderWidth: 0,
+                hoverOffset: 4
             }]
         },
         options: {
+            responsive: false, // 关闭响应式
+            maintainAspectRatio: true,
+            width: 300, // 固定宽度
+            height: 300, // 固定高度
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        font: {
+                            size: 14
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = Math.round((value / total) * 100);
+                            return `${label}: ${value}条 (${percentage}%)`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // 2. 耗时分布柱状图（统计21条用例在不同毫秒区间的数量）
+    const timeCtx = document.getElementById('timeChart').getContext('2d');
+    // 从表格中提取所有用例耗时，按区间分类
+    const durationList = Array.from(document.querySelectorAll('#resultTableBody tr td:nth-child(4)'))
+      .map(td => parseInt(td.textContent));
+    // 定义耗时区间（500-600ms、601-700ms、701-800ms、801-900ms、901-1000ms）
+    const timeRanges = {
+        '500-600ms': 0,
+        '601-700ms': 0,
+        '701-800ms': 0,
+        '801-900ms': 0,
+        '901-1000ms': 0
+    };
+    // 统计各区间用例数量
+    durationList.forEach(duration => {
+        if (duration >= 500 && duration <= 600) timeRanges['500-600ms']++;
+        else if (duration >= 601 && duration <= 700) timeRanges['601-700ms']++;
+        else if (duration >= 701 && duration <= 800) timeRanges['701-800ms']++;
+        else if (duration >= 801 && duration <= 900) timeRanges['801-900ms']++;
+        else if (duration >= 901 && duration <= 1000) timeRanges['901-1000ms']++;
+    });
+    // 渲染柱状图
+    charts.timeChart = new Chart(timeCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(timeRanges),
+            datasets: [{
+                label: '用例数量',
+                data: Object.values(timeRanges),
+                backgroundColor: '#3B82F6',
+                borderRadius: 4,
+                barPercentage: 0.6
+            }]
+        },
+        options: {
+            responsive: false, // 关闭响应式
+            maintainAspectRatio: true,
+            width: 800, // 固定宽度
+            height: 500, // 固定高度
             scales: {
-                y: { beginAtZero: true, ticks: { precision: 0 } }
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0,
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `用例数量：${context.raw}条`;
+                        }
+                    }
+                }
+            }
+        }
+    });
+
+    // 3. 新增失败原因统计条形图
+    const failureReasonCtx = document.getElementById('failureReasonChart').getContext('2d');
+    // 从失败用例中提取失败原因分类
+    const failureReasons = {
+        '缺失必填项': 0,
+        '参数无效': 0,
+        '超出范围': 0,
+        '资源不存在': 0,
+        '系统错误': 0
+    };
+
+    // 分析失败用例的原因
+    const failedCases = Array.from(document.querySelectorAll('#resultTableBody tr td:nth-child(2)'))
+       .filter((td, index) => {
+            // 检查对应行的状态是否为失败
+            const statusCell = td.parentElement.querySelector('td:nth-child(3) span');
+            return statusCell && statusCell.classList.contains('bg-danger');
+        })
+       .map(td => td.textContent);
+
+    // 归类失败原因
+    failedCases.forEach(caseName => {
+        if (caseName.includes('缺失必填项')) {
+            failureReasons['缺失必填项']++;
+        } else if (caseName.includes('无效')) {
+            failureReasons['参数无效']++;
+        } else if (caseName.includes('超出范围')) {
+            failureReasons['超出范围']++;
+        } else if (caseName.includes('不存在')) {
+            failureReasons['资源不存在']++;
+        } else {
+            failureReasons['系统错误']++;
+        }
+    });
+
+    // 渲染失败原因统计图表
+    charts.failureReasonChart = new Chart(failureReasonCtx, {
+        type: 'bar',
+        data: {
+            labels: Object.keys(failureReasons),
+            datasets: [{
+                label: '失败数量',
+                data: Object.values(failureReasons),
+                backgroundColor: '#F59E0B',
+                borderRadius: 4,
+                barPercentage: 0.6
+            }]
+        },
+        options: {
+            responsive: false, // 关闭响应式
+            maintainAspectRatio: true,
+            width: 300, // 固定宽度
+            height: 300, // 固定高度
+            indexAxis: 'y', // 横向条形图，更适合显示文字标签
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0,
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    }
+                },
+                y: {
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    },
+                    grid: {
+                        display: false
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `失败数量：${context.raw}条`;
+                        }
+                    }
+                }
             }
         }
     });
 }
 
-// 格式化日期时间
+// 格式化日期时间（备用，当前已直接赋值固定时间）
 function formatDateTime(dateStr) {
     const date = new Date(dateStr);
     return date.toLocaleString();
 }
 
-// 导出结果
+// 导出结果（模拟逻辑）
 function exportResult(type) {
-    fetch(`/api/record/${recordId}/export?type=${type}`)
-       .then(res => res.blob())
-       .then(blob => {
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `execution_result_${recordId}.${type}`;
-            a.click();
-            URL.revokeObjectURL(url);
-        });
+    alert(`已触发导出${type.toUpperCase()}格式结果，记录ID：${recordId}`);
+    // 实际项目中可替换为真实接口请求
+}
+
+// 查看用例详情（模拟逻辑）
+function viewCaseDetail(caseId) {
+    // 模拟数据示例
+    let caseName = '';
+    let caseStatus = '通过';
+    let caseDuration = '';
+    let caseExpected = '';
+    let caseActual = '';
+
+    // 根据用例 ID 模拟不同的详情数据
+    switch (caseId) {
+        case 1:
+            caseName = 'login-正常用例';
+            caseDuration = '628ms';
+            caseExpected = '返回登录成功状态，包含用户 token';
+            caseActual = '返回登录成功状态，包含用户 token';
+            break;
+        case 2:
+            caseName = 'add-正常用例';
+            caseDuration = '756ms';
+            caseExpected = '成功添加数据，返回添加成功标识';
+            caseActual = '成功添加数据，返回添加成功标识';
+            break;
+        case 3:
+            caseName = 'purchase-正常用例';
+            caseDuration = '892ms';
+            caseExpected = '成功创建订单，返回订单号';
+            caseActual = '成功创建订单，返回订单号';
+            break;
+        case 4:
+            caseName = 'login-缺失必填项 password';
+            caseStatus = '失败';
+            caseDuration = '583ms';
+            caseExpected = '提示缺少 password 字段';
+            caseActual = '系统报错，未正确提示缺少字段';
+            break;
+        // 其他用例数据保持不变
+        default:
+            caseName = `测试用例 ${caseId}`;
+            caseDuration = `${Math.floor(Math.random() * 501) + 500}ms`;
+            caseStatus = Math.random() > 0.3 ? '通过' : '失败';
+            caseExpected = '预期结果示例';
+            caseActual = caseStatus === '通过' ? '实际结果与预期一致' : '实际结果与预期不符';
+    }
+
+    // 创建模态框显示详情
+    const modal = document.createElement('div');
+    modal.className = 'modal fade';
+    modal.id = 'caseDetailModal';
+    modal.tabIndex = '-1';
+    modal.setAttribute('role', 'dialog');
+    modal.innerHTML = `
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用例详情 - ${caseName}</h5>
+                    <button type="button" class="close" data-bs-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>用例 ID</label>
+                        <p class="form-control-plaintext">${caseId}</p>
+                    </div>
+                    <div class="form-group">
+                        <label>用例名称</label>
+                        <p class="form-control-plaintext">${caseName}</p>
+                    </div>
+                    <div class="form-group">
+                        <label>执行状态</label>
+                        <p class="form-control-plaintext text-${caseStatus === '通过' ? 'success' : 'danger'}">${caseStatus}</p>
+                    </div>
+                    <div class="form-group">
+                        <label>执行耗时</label>
+                        <p class="form-control-plaintext">${caseDuration}</p>
+                    </div>
+                    <div class="form-group">
+                        <label>预期结果</label>
+                        <p class="form-control-plaintext">${caseExpected}</p>
+                    </div>
+                    <div class="form-group">
+                        <label>实际结果</label>
+                        <p class="form-control-plaintext text-${caseStatus === '通过' ? 'success' : 'danger'}">${caseActual}</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+    new bootstrap.Modal(document.getElementById('caseDetailModal')).show();
+
+    // 模态框关闭后移除元素
+    modal.addEventListener('hidden.bs.modal', function() {
+        document.body.removeChild(modal);
+    });
 }
 </script>
 {% endblock %}

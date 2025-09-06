@@ -12,6 +12,8 @@ import json
 from sqlalchemy.exc import SQLAlchemyError
 from openpyxl import Workbook
 import io
+from flask import Blueprint, request, jsonify
+from flask_sqlalchemy import SQLAlchemy
 
 
 main_bp = Blueprint('main', __name__)
@@ -42,6 +44,10 @@ def test_plan_management():
 @main_bp.route('/execution-result')
 def execution_result():
     return render_template('execution_result.html')
+
+@main_bp.route('/user-management')
+def user_management():
+    return render_template('user_management.html')
 
 # --------------------- 新增：接口编辑页面路由 ---------------------
 @main_bp.route('/interface/edit/<int:interface_id>')
@@ -768,24 +774,73 @@ def generate_cases(project_id):
 @main_bp.route('/api/project/<int:project_id>/cases', methods=['GET'])
 def get_project_cases(project_id):
     try:
-        # 联表查询用例和所属接口，获取项目下所有用例
-        cases = db.session.query(TestCase).join(Interface, TestCase.interface_id == Interface.interface_id).filter(
-            Interface.project_id == project_id).all()
-        result = []
-        for case in cases:
-            result.append({
-                "case_id": case.case_id,
-                "case_name": case.case_name,
-                "request_header": case.request_header,
-                "request_param": case.request_param,
-                "expected_result": case.expected_result,
-                "assert_rule": case.assert_rule
-            })
-        return jsonify({"code": 200, "data": result}), 200
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 6))
+
+        cases_query = db.session.query(TestCase).join(Interface,
+                                                      TestCase.interface_id == Interface.interface_id).filter(
+            Interface.project_id == project_id
+        ).order_by(TestCase.case_id.asc())  # 按数据库ID升序排序
+
+        pagination = cases_query.paginate(page=page, per_page=per_page, error_out=False)
+
+        result = {
+            "code": 200,
+            "data": [
+                {
+                    "case_id": case.case_id,
+                    "case_name": case.case_name,
+                    "request_header": case.request_header,
+                    "request_param": case.request_param,
+                    "expected_result": case.expected_result,
+                    "assert_rule": case.assert_rule
+                }
+                for case in pagination.items
+            ],
+            "pagination": {
+                "total": pagination.total,
+                "pages": pagination.pages,
+                "current_page": pagination.page,
+                "per_page": pagination.per_page
+            }
+        }
+        return jsonify(result), 200
     except Exception as e:
-        return jsonify({"code": 500, "msg": f"获取项目用例失败：{str(e)}"}), 500
+        return jsonify({"code": 500, "msg": f"获取项目用例失败: {str(e)}"}), 500
 
+@main_bp.route('/api/project/<int:project_id>/all_cases', methods=['GET'])
+def get_project_all_cases(project_id):
+    try:
+        cases_query = db.session.query(TestCase).join(Interface,
+                                                      TestCase.interface_id == Interface.interface_id).filter(
+            Interface.project_id == project_id
+        ).order_by(TestCase.case_id.asc())  # 按数据库ID升序排序
 
+        cases = cases_query.all()
+
+        result = {
+            "code": 200,
+            "data": [
+                {
+                    "case_id": case.case_id,
+                    "case_name": case.case_name,
+                    "request_header": case.request_header,
+                    "request_param": case.request_param,
+                    "expected_result": case.expected_result,
+                    "assert_rule": case.assert_rule
+                }
+                for case in cases
+            ],
+            "pagination": {
+                "total": len(cases),
+                "pages": 1,
+                "current_page": 1,
+                "per_page": len(cases)
+            }
+        }
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({"code": 500, "msg": f"获取项目所有用例失败: {str(e)}"}), 500
 # # 修改获取单个接口下用例列表接口
 # @main_bp.route('/api/interface/<int:interface_id>/cases', methods=['GET'])
 # def get_interface_cases(interface_id):

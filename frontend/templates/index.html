@@ -8,7 +8,7 @@
     <!-- 自定义样式 -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     <style>
-        /* 登录提示样式（保留，以备后续扩展） */
+        /* 登录提示样式 */
        .login-prompt {
             min-height: 50vh;
             display: flex;
@@ -24,11 +24,6 @@
         }
        .navbar-nav.dropdown.dropdown-toggle::after {
             margin-top: 0.25rem;
-        }
-        /* 补充：确保导航栏容器无额外边距，与内容区对齐 */
-       .navbar.container-fluid {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
         }
     </style>
 </head>
@@ -80,8 +75,8 @@
             </div>
         </div>
     </nav>
-    <!-- 右侧内容区域：使用Bootstrap内置类px-2缩小左右内边距，mx-0清除额外外边距 -->
-    <main class="container mt-4 px-2 mx-0">
+    <!-- 右侧内容区域 -->
+    <main class="container-fluid mt-4 px-2">
         <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
             <h1 class="h2">{% block page_title %}{% endblock %}</h1>
         </div>
@@ -90,25 +85,26 @@
         {% endblock %}
     </main>
     <!-- 依赖脚本 -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+    <head>
+        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+        <script src="{{ url_for('static', filename='js/bootstrap.min.js') }}"></script>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    </head>
+
     <script>
         $(document).ready(function () {
-            // 检查并销毁旧的下拉菜单实例，避免重复初始化问题
+            // 检查是否存在旧的初始化，若有则销毁（处理动态加载内容可能导致的重复初始化问题）
             const existingDropdown = $('.dropdown-toggle').data('bs.dropdown');
             if (existingDropdown) {
                 existingDropdown.dispose();
             }
-            // 重新初始化下拉菜单，确保点击生效
+            // 重新初始化所有下拉菜单
             $('.dropdown-toggle').dropdown();
-            // 登出按钮点击事件（示例逻辑）
-            $('.dropdown-menu a:contains("登出")').click(function (e) {
+            // 为登出按钮添加点击事件（示例，实际需替换为真实登出逻辑）
+            $('.dropdown-menu a[href="#logout"]').click(function (e) {
                 e.preventDefault();
-                // 实际项目中替换为后端登出接口请求
-                if (confirm('确定要登出当前账号吗？')) {
-                    alert('登出成功，即将返回首页');
-                    window.location.href = '/';
-                }
+                // 这里添加实际的登出逻辑，如发送登出请求到后端
+                alert('执行登出操作');
             });
         });
     </script>

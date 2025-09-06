@@ -2,6 +2,7 @@ import os
 from flask import Flask
 from .models import db, User  # 导入数据库实例、User 模型
 from app.routes.main_routes import main_bp  # 导入主蓝图
+from app.routes.plan_routes import plan_bp
 from flask_login import LoginManager
 import json
 from jinja2 import Environment
@@ -59,6 +60,7 @@ def create_app():
 
     # 5. 注册蓝图（路由）
     app.register_blueprint(main_bp)  # 注册主路由蓝图
+    app.register_blueprint(plan_bp)
 
     # 6. 创建数据库表（在应用上下文中）
     with app.app_context():
